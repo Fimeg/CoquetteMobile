@@ -1,0 +1,15 @@
+<resources>
+    <string name="app_name">Coquette Mobile</string>
+    <string name="chat_tab">Chat</string>
+    <string name="settings_tab">Settings</string>
+    <string name="send_message">Send</string>
+    <string name="message_hint">Type your message...</string>
+    <string name="thinking">Thinking...</string>
+    <string name="model_switching">Switching models...</string>
+    <string name="connection_error">Connection error</string>
+    <string name="retry">Retry</string>
+    <string name="server_unavailable">Ollama server unavailable</string>
+    <string name="health_check_failed">Health check failed</string>
+    <string name="connected">Connected</string>
+    <string name="disconnected">Disconnected</string>
+</resources>
