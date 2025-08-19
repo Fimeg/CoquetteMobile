@@ -16,6 +16,7 @@ import androidx.navigation.navArgument
 import androidx.navigation.NavType
 import com.yourname.coquettemobile.ui.chat.ChatScreen
 import com.yourname.coquettemobile.ui.settings.SettingsScreen
+import com.yourname.coquettemobile.ui.settings.SystemPromptsScreen
 import com.yourname.coquettemobile.ui.personalities.PersonalityManagementScreen
 import com.yourname.coquettemobile.ui.history.ConversationHistoryScreen
 import com.yourname.coquettemobile.ui.theme.CoquetteMobileTheme
@@ -75,11 +76,17 @@ fun CoquetteApp() {
         composable("settings") {
             SettingsScreen(
                 onBackClick = { navController.popBackStack() },
-                onManagePersonalitiesClick = { navController.navigate("personality_management") }
+                onManagePersonalitiesClick = { navController.navigate("personality_management") },
+                onSystemPromptsClick = { navController.navigate("system_prompts") }
             )
         }
         composable("personality_management") {
             PersonalityManagementScreen(
+                onBackClick = { navController.popBackStack() }
+            )
+        }
+        composable("system_prompts") {
+            SystemPromptsScreen(
                 onBackClick = { navController.popBackStack() }
             )
         }

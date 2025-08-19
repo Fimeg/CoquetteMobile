@@ -16,6 +16,12 @@ import com.yourname.coquettemobile.core.preferences.AppPreferences
 import com.yourname.coquettemobile.core.tools.DeviceContextTool
 import com.yourname.coquettemobile.core.tools.MobileToolRegistry
 import com.yourname.coquettemobile.core.tools.MobileToolsAgent
+import com.yourname.coquettemobile.core.prompt.PromptStateManager
+import com.yourname.coquettemobile.core.prompt.ModuleRegistry
+import com.yourname.coquettemobile.core.prompt.MemoryStore
+import com.yourname.coquettemobile.core.prompt.SimpleMemoryStore
+import com.yourname.coquettemobile.core.prompt.SystemPromptManager
+import com.yourname.coquettemobile.core.ai.PlannerService
 import dagger.Module
 import dagger.Provides
 import dagger.hilt.InstallIn
@@ -123,6 +129,39 @@ object AppModule {
         ollamaService: OllamaService
     ): MobileToolsAgent {
         return MobileToolsAgent(toolRegistry, ollamaService)
+    }
+    
+    @Provides
+    @Singleton
+    fun provideModuleRegistry(@ApplicationContext context: Context): ModuleRegistry {
+        return ModuleRegistry(context)
+    }
+    
+    @Provides
+    @Singleton
+    fun provideMemoryStore(): MemoryStore {
+        return SimpleMemoryStore()
+    }
+    
+    @Provides
+    @Singleton
+    fun providePromptStateManager(
+        moduleRegistry: ModuleRegistry,
+        memoryStore: MemoryStore
+    ): PromptStateManager {
+        return PromptStateManager(moduleRegistry, memoryStore)
+    }
+    
+    @Provides
+    @Singleton
+    fun providePlannerService(ollamaService: OllamaService): PlannerService {
+        return PlannerService(ollamaService)
+    }
+    
+    @Provides
+    @Singleton
+    fun provideSystemPromptManager(@ApplicationContext context: Context): SystemPromptManager {
+        return SystemPromptManager(context)
     }
     
     @EntryPoint
