@@ -76,9 +76,12 @@ class PromptStateManager @Inject constructor(
     }
 
     // --- Prompt Assembly ---
-    fun buildPersonalityPrompt(userTurn: String): String {
+    fun buildPersonalityPrompt(userTurn: String, personalityOverride: String? = null): String {
         val builder = StringBuilder()
-        builder.append(coreIdentity).append("\n\n")
+        
+        // Use personality override if provided, otherwise use core identity
+        val baseIdentity = personalityOverride ?: coreIdentity
+        builder.append(baseIdentity).append("\n\n")
 
         // Append active modules
         _activeModules.value.forEach { mod ->

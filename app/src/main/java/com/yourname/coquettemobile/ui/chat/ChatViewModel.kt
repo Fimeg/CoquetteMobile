@@ -62,7 +62,7 @@ class ChatViewModel @Inject constructor(
     private val _availableModels = MutableStateFlow<List<String>>(emptyList())
     val availableModels: StateFlow<List<String>> = _availableModels.asStateFlow()
     
-    private val _selectedModel = MutableStateFlow("qwen3:8b")
+    private val _selectedModel = MutableStateFlow("auto")
     val selectedModel: StateFlow<String> = _selectedModel.asStateFlow()
     
     private val _connectionStatus = MutableStateFlow("Disconnected")
@@ -345,10 +345,17 @@ class ChatViewModel @Inject constructor(
         viewModelScope.launch {
             val activeConversation = conversationRepository.getActiveConversation()
             if (activeConversation != null) {
-                _currentConversation.value = activeConversation
                 // Load messages for active conversation
                 val messages = conversationRepository.getRecentMessages(activeConversation.id, 100)
-                _chatMessages.value = messages
+                
+                if (messages.isNotEmpty()) {
+                    // Previous conversation has messages - create a fresh chat
+                    createNewConversation()
+                } else {
+                    // Previous conversation is empty - reuse it
+                    _currentConversation.value = activeConversation
+                    _chatMessages.value = messages
+                }
             } else {
                 // Create new conversation if none exists
                 createNewConversation()
@@ -464,8 +471,21 @@ class ChatViewModel @Inject constructor(
         // Set planner note if any
         promptStateManager.setPlannerNote(plannerNote)
         
-        // Build the personality prompt using PromptStateManager
-        val personalityPrompt = promptStateManager.buildPersonalityPrompt(message)
+        // Get the selected personality system prompt and combine with core identity
+        val selectedPersonalityPrompt = _selectedPersonality.value?.let { personality ->
+            personalityProvider.getSystemPrompt(personality.id)
+        } ?: personalityProvider.getSystemPrompt("default")
+        
+        // Build combined prompt: Core identity + Selected personality
+        val coreIdentity = systemPromptManager.corePersonalityPrompt
+        val combinedSystemPrompt = if (selectedPersonalityPrompt.isNotBlank()) {
+            "$coreIdentity\n\n## ACTIVE PERSONALITY\n$selectedPersonalityPrompt"
+        } else {
+            coreIdentity
+        }
+        
+        // Build the personality prompt using PromptStateManager with personality override
+        val personalityPrompt = promptStateManager.buildPersonalityPrompt(message, combinedSystemPrompt)
         
         // Use personality model to generate response
         val personalityModel = appPreferences.personalityModel
