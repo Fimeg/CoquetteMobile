@@ -513,10 +513,13 @@ class ChatViewModel @Inject constructor(
         val fullContentBuilder = StringBuilder()
         
         try {
-            ollamaService.sendMessageStream(
-                message = prompt,
+            // Use chat completion with conversation history for personality model
+            val conversationHistory = buildConversationHistoryForModel(conversationId)
+            
+            ollamaService.sendChatMessageStream(
+                messages = conversationHistory,
                 model = model,
-                systemPrompt = null // Already included in prompt
+                systemPrompt = prompt // Pass as system prompt for chat completion
             ).collect { chunk ->
                 fullContentBuilder.append(chunk)
                 val currentText = fullContentBuilder.toString()
@@ -562,10 +565,13 @@ class ChatViewModel @Inject constructor(
     }
     
     private suspend fun handleSplitBrainNormalResponse(prompt: String, model: String, conversationId: String) {
-        val parsedResponse = ollamaService.sendMessage(
-            message = prompt,
+        // Use chat completion with conversation history for personality model
+        val conversationHistory = buildConversationHistoryForModel(conversationId)
+        
+        val parsedResponse = ollamaService.sendChatMessage(
+            messages = conversationHistory,
             model = model,
-            systemPrompt = null // Already included in prompt
+            systemPrompt = prompt // Pass as system prompt for chat completion
         )
         
         val aiMessage = ChatMessage(
@@ -655,4 +661,18 @@ class ChatViewModel @Inject constructor(
     }
     
     fun getAvailableModules() = moduleRegistry.getAvailableModules()
+    
+    /**
+     * Build conversation history for chat completion models
+     * Maintains proper message context for personality model
+     */
+    private suspend fun buildConversationHistoryForModel(conversationId: String): List<ChatMessage> {
+        // Get recent messages from current conversation
+        val recentMessages = conversationRepository.getRecentMessages(conversationId, 10)
+        
+        // Filter to only user and AI messages (skip tool/error messages for cleaner context)
+        return recentMessages.filter { 
+            it.type == MessageType.USER || it.type == MessageType.AI 
+        }.sortedBy { it.timestamp }
+    }
 }

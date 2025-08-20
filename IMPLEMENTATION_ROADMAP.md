@@ -1,87 +1,127 @@
-# 🚀 CoquetteMobile: Next Steps & Tool Testing Plan
+# 🚀 CoquetteMobile Implementation Roadmap - Next Session Continuity
 
-## Immediate Testing Priorities
+## **Current State Summary**
+✅ **Split-brain architecture** with user-editable system prompts  
+✅ **Personality integration fix** - combines system + database personalities  
+✅ **Smart conversation management** - no blank accumulation  
+✅ **Background service** for connection persistence  
+✅ **Module registry foundation** with 4 modules defined  
 
-### 1. **Connection Stability Testing** 
-- Test background persistence - switch apps, lock screen, wait 5+ minutes
-- Verify "Software caused connection abort" is fixed
-- Test streaming responses during network fluctuations
-- Monitor foreground service notification behavior
+⚠️ **CRITICAL: User has 11K personality file and needs module management ASAP**
 
-### 2. **Think Tag Real-time Display**
-- Test streaming with `<think>` content in deepseek-r1:32b responses
-- Verify thinking appears live during generation
-- Test collapsible thinking sections in UI
-- Confirm thinking content persists in conversation history
+## **Module Status - PARTIALLY IMPLEMENTED**
+**Modules exist but NO UI to activate them:**
+- ✅ **Therapy Module** - defined in ModuleRegistry.kt
+- ✅ **Activist Module** - defined in ModuleRegistry.kt  
+- ✅ **Story Module** - defined in ModuleRegistry.kt
+- ✅ **Erotica Module** - defined in ModuleRegistry.kt
+- ❌ **No UI to toggle modules on/off**
+- ❌ **User stuck with large 11K personality file**
 
-### 3. **Tool System Validation**
-- Test device context queries: "What's my battery status?"
-- Verify tool keyword detection works properly
-- Test MobileToolsAgent planning with gemma3n:e4b
-- Validate tool results display in chat
-
-## Next Implementation Phase
-
-### 4. **Enhanced Mobile Tools** 📱
+**ChatViewModel has methods but no UI:**
 ```kotlin
-// Priority order for new tools:
-1. CameraTool - Photo capture and analysis
-2. LocationTool - GPS context (privacy-conscious)
-3. FileTool - Local file operations
-4. ContactsTool - Contact lookup/management
-5. CalendarTool - Schedule integration
-6. NotificationTool - System notification management
+fun getActiveModules() = promptStateManager.activeModules
+fun toggleModule(moduleName: String)  
+fun getAvailableModules() = moduleRegistry.getAvailableModules()
 ```
 
-### 5. **Advanced AI Features** 🧠
-- **Multi-step reasoning**: Chain multiple tools together
-- **Context persistence**: Remember tool results across conversations  
-- **Proactive suggestions**: "Your battery is low, should I enable power saving?"
-- **Background monitoring**: Silent health checks and alerts
+## **IMMEDIATE PRIORITY (Start Here Next Session)**
 
-### 6. **UI/UX Enhancements** ✨
-- **Voice input/output**: Speech-to-text and TTS integration
-- **Quick actions**: Floating bubble for instant access
-- **Gesture controls**: Voice activation, shake to wake
-- **Dark mode refinements**: Better thinking tag visibility
+### **1. Module Management UI - URGENT** 🔥
+User needs to break down 11K personality into manageable modules
 
-### 7. **Performance Optimizations** ⚡
-- **Model routing intelligence**: Auto-select best model per task type
-- **Response caching**: Cache common device queries
-- **Streaming optimizations**: Reduce latency, improve chunk handling
-- **Memory management**: Efficient conversation pruning
+**CRITICAL: Personality-specific module availability**
+- Ani: Therapy, Activist, Story, Erotica ✅
+- Marvin (tech wizard/luddite): Therapy, Tech, Grumpy ✅ 
+- Corporate Bot: Professional, Meeting, Analytics ✅
+- **NO flirty modules for inappropriate personalities!**
 
-## Testing Scenarios
+**Implementation:**
+```kotlin
+// Personality entity needs allowedModules field
+data class Personality(
+    val allowedModules: List<String> = listOf("Therapy", "Activist", "Story")
+)
 
-### **Tool Integration Tests**
-```
-✅ "What's my device status?" → DeviceContextTool
-✅ "Check my battery" → Battery info subset  
-✅ "How much storage do I have?" → Storage analysis
-⏳ "Take a photo of this" → CameraTool (pending)
-⏳ "Where am I?" → LocationTool (pending)
-⏳ "Find my photos from yesterday" → FileTool (pending)
+// UI shows only allowed modules per personality
+fun getAvailableModulesForPersonality(personalityId: String): List<String>
 ```
 
-### **Privacy Validation**
-- Confirm no data leaves device except to local Ollama
-- Test airplane mode functionality (local tools only)
-- Verify personality storage is device-local
-- Test conversation export/import for user control
+**Flow:**
+1. Select personality → UI shows ONLY their allowed modules
+2. Toggle personality-appropriate modules on/off
+3. Show active modules as badges in chat header
+4. Module availability changes with personality switch
 
-### **Real-world Usage**
-- Daily driver testing: Replace Google Assistant workflows
-- Battery impact assessment with background service
-- Network usage monitoring (should be minimal)
-- Performance on various Android devices
+### **2. WebFetchTool Implementation** 🌐  
+Desktop Coquette patterns ready to adapt
 
-## Success Metrics
+**Files to create:**
+- `WebFetchTool.kt` - HTTP fetching with privacy controls
+- `ExtractorTool.kt` - HTML to readable text (using Jsoup)
+- `SummarizerTool.kt` - Long content compression
 
-🎯 **Core Goals:**
-- Zero connection drops during normal usage
-- Sub-2-second response times for device queries
-- Thinking content visible within 500ms of generation
-- All personal data stays 100% local
-- Better UX than Google Assistant for privacy-conscious users
+**Safety patterns from desktop:**
+- User approval for external requests
+- Content length limits (100KB)
+- Private IP blocking
+- URL validation
 
-Ready to build the future of private mobile AI! 🔥
+### **3. DeviceContextTool Truncation Fix** 📱
+Check ChatScreen message display - likely UI limits not tool limits
+
+## **Desktop Coquette Resources Available**
+**Key files analyzed:**
+- `/tools/web-fetch.ts` - Complete HTTP fetching with safety
+- `/agents/NewToolsAgent.ts` - Clean tool orchestration  
+- `/WorkflowPatterns.ts` - 5-step workflow automation
+- `/IntelligenceRouter.ts` - AI-driven tool routing
+
+## **Implementation Decisions Needed**
+
+### **Web Tool Permissions:**
+- [ ] User approval for each fetch vs whitelist domains?
+- [ ] Auto-chain fetch→extract→summarize or ask user?
+- [ ] Content limits: 100KB like desktop or mobile-specific?
+
+### **Module Strategy:**
+- [ ] Move user's 11K personality into which modules?
+- [ ] **Personality-specific module sets** (no Erotica for Marvin!)
+- [ ] Auto-activate modules based on conversation context?
+- [ ] Module timeout (deactivate after N turns)?
+- [ ] **Database migration**: Add allowedModules to Personality table
+
+## **Next Session Action Plan**
+
+### **Phase 1: Module UI (30 min)**
+1. Create ModuleManagementScreen.kt
+2. Add module toggles to ChatScreen header
+3. Test personality switching in real-time
+
+### **Phase 2: WebFetch (60 min)**  
+1. Adapt desktop WebFetchTool patterns
+2. Add HTML extraction with Jsoup
+3. Test "What's on Hacker News?" workflow
+
+### **Phase 3: Tool Chaining (30 min)**
+1. Enhanced PlannerService for multi-step tools
+2. Progress indicators for tool chains
+3. Test fetch→extract→summarize flow
+
+## **Critical Files Modified**
+- `ChatViewModel.kt` - Split-brain + personality integration
+- `SystemPromptManager.kt` - User-editable prompts  
+- `PromptStateManager.kt` - Module assembly
+- `ModuleRegistry.kt` - 4 personality modules defined
+
+## **User Pain Points to Address**
+1. **11K personality file management** - needs module breakdown
+2. **DeviceContextTool truncation** - UI display limits
+3. **No web content access** - needs WebFetch implementation
+4. **Module activation** - no UI currently exists
+
+**GitHub Branch:** `split-brain-architecture`  
+**Last Commit:** Fix personality integration and conversation management
+
+---
+*Ready to transform CoquetteMobile into desktop Coquette's mobile successor!* 🚀
