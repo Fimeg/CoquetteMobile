@@ -41,7 +41,7 @@ class AppPreferences @Inject constructor(
         set(value) = preferences.edit().putString(KEY_PERSONALITY_MODEL, value).apply()
     
     var enableSplitBrain: Boolean
-        get() = preferences.getBoolean(KEY_ENABLE_SPLIT_BRAIN, false)
+        get() = preferences.getBoolean(KEY_ENABLE_SPLIT_BRAIN, true)
         set(value) = preferences.edit().putBoolean(KEY_ENABLE_SPLIT_BRAIN, value).apply()
     
     companion object {

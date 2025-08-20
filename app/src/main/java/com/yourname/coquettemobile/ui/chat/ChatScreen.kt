@@ -26,6 +26,10 @@ import androidx.compose.material.icons.filled.Clear
 import androidx.compose.material.icons.filled.KeyboardArrowDown  
 import androidx.compose.material.icons.filled.KeyboardArrowUp
 import androidx.compose.material.icons.filled.Send
+import androidx.compose.animation.core.*
+import androidx.compose.ui.draw.rotate
+import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.unit.sp
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Menu
 import androidx.compose.material.icons.filled.Add
@@ -71,8 +75,16 @@ fun ChatScreen(
     conversationId: String? = null,
     viewModel: ChatViewModel = hiltViewModel()
 ) {
+    val context = androidx.compose.ui.platform.LocalContext.current
+    val appPreferences = remember {
+        dagger.hilt.android.EntryPointAccessors.fromApplication(
+            context.applicationContext,
+            com.yourname.coquettemobile.di.AppModule.AppPreferencesEntryPoint::class.java
+        ).appPreferences()
+    }
     val chatMessages by viewModel.chatMessages.collectAsStateWithLifecycle()
     val isLoading by viewModel.isLoading.collectAsStateWithLifecycle()
+    val processingState by viewModel.processingState.collectAsStateWithLifecycle()
     val selectedPersonality by viewModel.selectedPersonality.collectAsStateWithLifecycle()
     val availablePersonalities by viewModel.availablePersonalities.collectAsStateWithLifecycle()
     val availableModels by viewModel.availableModels.collectAsStateWithLifecycle()
@@ -231,7 +243,21 @@ fun ChatScreen(
                 verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {
                 items(chatMessages) { message ->
-                    ChatMessageBubble(message = message)
+                    ChatMessageBubble(
+                        message = message,
+                        showModelUsed = appPreferences.showModelUsed
+                    )
+                }
+                
+                // Processing state indicator
+                if (isLoading) {
+                    item {
+                        ProcessingIndicator(
+                            state = processingState,
+                            personalityName = selectedPersonality?.name ?: "Scout",
+                            modifier = Modifier.padding(vertical = 8.dp)
+                        )
+                    }
                 }
             }
 
@@ -304,7 +330,10 @@ fun ChatScreen(
 }
 
 @Composable
-fun ChatMessageBubble(message: ChatMessage) {
+fun ChatMessageBubble(
+    message: ChatMessage,
+    showModelUsed: Boolean = true
+) {
     val isUserMessage = message.type == MessageType.USER
     val backgroundColor = when (message.type) {
         MessageType.USER -> MaterialTheme.colorScheme.primaryContainer
@@ -403,13 +432,113 @@ fun ChatMessageBubble(message: ChatMessage) {
                         style = MaterialTheme.typography.bodyMedium
                     )
                     
-                    if (message.modelUsed != null && message.type == MessageType.AI) {
+                    if (message.modelUsed != null && message.type == MessageType.AI && showModelUsed) {
                         Spacer(modifier = Modifier.height(4.dp))
                         Text(
                             text = "via ${message.modelUsed}",
                             style = MaterialTheme.typography.labelSmall,
                             color = textColor.copy(alpha = 0.7f)
                         )
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+fun ProcessingIndicator(
+    state: ChatViewModel.ProcessingState,
+    personalityName: String = "Scout",
+    modifier: Modifier = Modifier
+) {
+    val infiniteTransition = rememberInfiniteTransition(label = "processing")
+    val rotation by infiniteTransition.animateFloat(
+        initialValue = 0f,
+        targetValue = 360f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(2000, easing = LinearEasing),
+            repeatMode = RepeatMode.Restart
+        ),
+        label = "rotation"
+    )
+    
+    val alpha by infiniteTransition.animateFloat(
+        initialValue = 0.3f,
+        targetValue = 1f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(1000, easing = FastOutSlowInEasing),
+            repeatMode = RepeatMode.Reverse
+        ),
+        label = "alpha"
+    )
+    
+    Box(
+        modifier = modifier.fillMaxWidth(),
+        contentAlignment = Alignment.CenterStart
+    ) {
+        Card(
+            modifier = Modifier
+                .widthIn(max = 200.dp)
+                .padding(horizontal = 4.dp),
+            shape = RoundedCornerShape(
+                topStart = 4.dp,
+                topEnd = 16.dp,
+                bottomStart = 16.dp,
+                bottomEnd = 16.dp
+            )
+        ) {
+            Surface(
+                color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.7f),
+                contentColor = MaterialTheme.colorScheme.onSurfaceVariant
+            ) {
+                Row(
+                    modifier = Modifier.padding(12.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    when (state) {
+                        ChatViewModel.ProcessingState.Scout -> {
+                            Text(
+                                text = "🔍",
+                                modifier = Modifier
+                                    .rotate(rotation)
+                                    .alpha(alpha),
+                                fontSize = 16.sp
+                            )
+                            Text(
+                                text = "$personalityName is exploring...",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = alpha)
+                            )
+                        }
+                        ChatViewModel.ProcessingState.Tools -> {
+                            Text(
+                                text = "🛠️",
+                                modifier = Modifier.alpha(alpha),
+                                fontSize = 16.sp
+                            )
+                            Text(
+                                text = "Running tools...",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = alpha)
+                            )
+                        }
+                        ChatViewModel.ProcessingState.Thinking -> {
+                            CircularProgressIndicator(
+                                modifier = Modifier.size(16.dp),
+                                color = MaterialTheme.colorScheme.primary,
+                                strokeWidth = 2.dp
+                            )
+                            Text(
+                                text = "Thinking...",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = alpha)
+                            )
+                        }
+                        ChatViewModel.ProcessingState.Idle -> {
+                            // No indicator when idle
+                        }
                     }
                 }
             }

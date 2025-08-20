@@ -52,6 +52,16 @@ class ChatViewModel @Inject constructor(
 
     private val _isLoading = MutableStateFlow(false)
     val isLoading: StateFlow<Boolean> = _isLoading.asStateFlow()
+    
+    private val _processingState = MutableStateFlow<ProcessingState>(ProcessingState.Idle)
+    val processingState: StateFlow<ProcessingState> = _processingState.asStateFlow()
+    
+    enum class ProcessingState {
+        Idle,
+        Scout,      // Scout is planning/routing
+        Thinking,   // AI model is generating response
+        Tools       // Tools are being executed
+    }
 
     private val _availablePersonalities = MutableStateFlow<List<Personality>>(emptyList())
     val availablePersonalities: StateFlow<List<Personality>> = _availablePersonalities.asStateFlow()
@@ -111,6 +121,7 @@ class ChatViewModel @Inject constructor(
 
         _chatMessages.value = _chatMessages.value + userMessage
         _isLoading.value = true
+        _processingState.value = ProcessingState.Scout
 
         viewModelScope.launch {
             try {
@@ -120,11 +131,13 @@ class ChatViewModel @Inject constructor(
                 // Save user message to database
                 conversationRepository.saveMessage(userMessage, conversation.id)
                 
-                // Use selected model or route automatically
+                // Use selected model or route automatically (only if routing is enabled)
                 val modelToUse = if (_selectedModel.value != "auto") {
                     _selectedModel.value
-                } else {
+                } else if (appPreferences.enableModelRouting) {
                     intelligenceRouter.selectModelForQuery(message)
+                } else {
+                    "qwen3:8b" // Default model when routing is disabled
                 }
                 
                 // Check if split-brain mode is enabled
@@ -148,6 +161,7 @@ class ChatViewModel @Inject constructor(
                 )
                 _chatMessages.value = _chatMessages.value + errorMessage
                 _isLoading.value = false
+                _processingState.value = ProcessingState.Idle
             }
         }
     }
@@ -188,6 +202,12 @@ class ChatViewModel @Inject constructor(
                     .replace("""<think>.*""".toRegex(RegexOption.DOT_MATCHES_ALL), "")
                     .trim()
                 
+                // Hide processing indicator when thinking content is detected or response starts
+                if ((thinkingContent != null || responseContent.isNotBlank()) && 
+                    _processingState.value != ProcessingState.Idle) {
+                    _processingState.value = ProcessingState.Idle
+                }
+                
                 // Update the streaming message
                 val updatedMessage = aiMessage.copy(
                     content = responseContent,
@@ -218,6 +238,7 @@ class ChatViewModel @Inject constructor(
         } finally {
             _currentStreamingMessage.value = null
             _isLoading.value = false
+            _processingState.value = ProcessingState.Idle
         }
     }
     
@@ -228,8 +249,9 @@ class ChatViewModel @Inject constructor(
             systemPrompt = systemPrompt
         )
 
-        // Apply subconscious reasoning for complex queries
-        val finalContent = if (intelligenceRouter.requiresDeepReasoning(message)) {
+        // Apply subconscious reasoning for complex queries (only if enabled)
+        val finalContent = if (appPreferences.enableSubconsciousReasoning && 
+                              intelligenceRouter.requiresDeepReasoning(message)) {
             subconsciousReasoner.analyzeAndRefine(
                 query = message,
                 initialResponse = parsedResponse.content,
@@ -409,12 +431,15 @@ class ChatViewModel @Inject constructor(
             
             when (decision.decision) {
                 "tool" -> {
+                    _processingState.value = ProcessingState.Tools
                     handleToolExecution(decision, message, conversationId)
                 }
                 "respond" -> {
+                    _processingState.value = ProcessingState.Thinking
                     handlePersonalityResponse(message, conversationId, decision.reason)
                 }
                 else -> {
+                    _processingState.value = ProcessingState.Thinking
                     handlePersonalityResponse(message, conversationId, "Unknown planner decision")
                 }
             }
@@ -534,6 +559,12 @@ class ChatViewModel @Inject constructor(
                     .replace("""<think>.*""".toRegex(RegexOption.DOT_MATCHES_ALL), "")
                     .trim()
                 
+                // Hide processing indicator when thinking content is detected or response starts
+                if ((thinkingContent != null || responseContent.isNotBlank()) && 
+                    _processingState.value != ProcessingState.Idle) {
+                    _processingState.value = ProcessingState.Idle
+                }
+                
                 val updatedMessage = aiMessage.copy(
                     content = responseContent,
                     thinkingContent = thinkingContent?.takeIf { it.isNotBlank() }
@@ -561,6 +592,7 @@ class ChatViewModel @Inject constructor(
         } finally {
             _currentStreamingMessage.value = null
             _isLoading.value = false
+            _processingState.value = ProcessingState.Idle
         }
     }
     
@@ -616,11 +648,13 @@ class ChatViewModel @Inject constructor(
             return
         }
         
-        // Use selected model or route automatically
+        // Use selected model or route automatically (only if routing is enabled)
         val modelToUse = if (_selectedModel.value != "auto") {
             _selectedModel.value
-        } else {
+        } else if (appPreferences.enableModelRouting) {
             intelligenceRouter.selectModelForQuery(message)
+        } else {
+            "qwen3:8b" // Default model when routing is disabled
         }
         
         // Get system prompt
