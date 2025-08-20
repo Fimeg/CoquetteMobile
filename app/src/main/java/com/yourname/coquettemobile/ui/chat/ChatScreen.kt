@@ -45,6 +45,7 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -121,11 +122,12 @@ fun ChatScreen(
                         contentAlignment = Alignment.Center
                     ) {
                         Box {
-                            IconButton(
-                                onClick = { showModelMenu = true }
+                            TextButton(
+                                onClick = { showModelMenu = true },
+                                modifier = Modifier.widthIn(min = 120.dp, max = 200.dp)
                             ) {
                                 Text(
-                                    text = if (selectedModel == "auto") "🤖 Auto" else selectedModel,
+                                    text = if (selectedModel == "auto") "🤖 Auto Route" else selectedModel,
                                     style = MaterialTheme.typography.titleMedium,
                                     maxLines = 1,
                                     overflow = TextOverflow.Ellipsis

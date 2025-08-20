@@ -13,12 +13,15 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
+import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.KeyboardArrowRight
 import androidx.compose.material3.Card
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
@@ -70,6 +73,9 @@ fun SettingsScreen(
     
     var showPlannerDropdown by remember { mutableStateOf(false) }
     var showPersonalityDropdown by remember { mutableStateOf(false) }
+    
+    var showServerDialog by remember { mutableStateOf(false) }
+    var serverUrlInput by remember { mutableStateOf(appPreferences.ollamaServerUrl) }
 
     Scaffold(
         topBar = {
@@ -104,10 +110,32 @@ fun SettingsScreen(
                         style = MaterialTheme.typography.titleMedium
                     )
                     
-                    Text(
-                        text = "Ollama Server: http://10.10.20.19:11434",
-                        style = MaterialTheme.typography.bodyMedium
-                    )
+                    // Ollama Server URL Setting
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable { showServerDialog = true }
+                            .padding(vertical = 8.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                text = "Ollama Server",
+                                style = MaterialTheme.typography.bodyMedium
+                            )
+                            Text(
+                                text = appPreferences.ollamaServerUrl,
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
+                            )
+                        }
+                        Icon(
+                            Icons.Default.Edit,
+                            contentDescription = "Edit server URL",
+                            tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
+                        )
+                    }
                     
                     Text(
                         text = "Available Models: Gemma 3, DeepSeek R1, Context7",
@@ -465,5 +493,56 @@ fun SettingsScreen(
                 }
             }
         }
+    }
+    
+    // Server URL Edit Dialog
+    if (showServerDialog) {
+        AlertDialog(
+            onDismissRequest = { showServerDialog = false },
+            title = { Text("Edit Ollama Server URL") },
+            text = {
+                Column {
+                    Text(
+                        text = "Enter the Ollama server URL:",
+                        style = MaterialTheme.typography.bodyMedium,
+                        modifier = Modifier.padding(bottom = 8.dp)
+                    )
+                    OutlinedTextField(
+                        value = serverUrlInput,
+                        onValueChange = { serverUrlInput = it },
+                        label = { Text("Server URL") },
+                        placeholder = { Text("http://192.168.1.100:11434") },
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                    Text(
+                        text = "Examples: http://localhost:11434, http://192.168.1.100:11434",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
+                        modifier = Modifier.padding(top = 4.dp)
+                    )
+                }
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        appPreferences.ollamaServerUrl = serverUrlInput.trim()
+                        showServerDialog = false
+                    }
+                ) {
+                    Text("Save")
+                }
+            },
+            dismissButton = {
+                TextButton(
+                    onClick = { 
+                        serverUrlInput = appPreferences.ollamaServerUrl // Reset to current value
+                        showServerDialog = false 
+                    }
+                ) {
+                    Text("Cancel")
+                }
+            }
+        )
     }
 }

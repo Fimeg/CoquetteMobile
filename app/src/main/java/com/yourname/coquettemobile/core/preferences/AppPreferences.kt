@@ -44,6 +44,11 @@ class AppPreferences @Inject constructor(
         get() = preferences.getBoolean(KEY_ENABLE_SPLIT_BRAIN, true)
         set(value) = preferences.edit().putBoolean(KEY_ENABLE_SPLIT_BRAIN, value).apply()
     
+    // Ollama Server Configuration
+    var ollamaServerUrl: String
+        get() = preferences.getString(KEY_OLLAMA_SERVER_URL, "http://10.10.20.19:11434") ?: "http://10.10.20.19:11434"
+        set(value) = preferences.edit().putString(KEY_OLLAMA_SERVER_URL, value).apply()
+    
     companion object {
         private const val KEY_STREAMING_ENABLED = "streaming_enabled"
         private const val KEY_SUBCONSCIOUS_REASONING = "subconscious_reasoning"
@@ -52,5 +57,6 @@ class AppPreferences @Inject constructor(
         private const val KEY_PLANNER_MODEL = "planner_model"
         private const val KEY_PERSONALITY_MODEL = "personality_model"
         private const val KEY_ENABLE_SPLIT_BRAIN = "enable_split_brain"
+        private const val KEY_OLLAMA_SERVER_URL = "ollama_server_url"
     }
 }

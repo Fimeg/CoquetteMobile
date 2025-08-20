@@ -37,8 +37,8 @@ object AppModule {
 
     @Provides
     @Singleton
-    fun provideOllamaService(): OllamaService {
-        return OllamaService()
+    fun provideOllamaService(appPreferences: AppPreferences): OllamaService {
+        return OllamaService(appPreferences)
     }
 
     @Provides
