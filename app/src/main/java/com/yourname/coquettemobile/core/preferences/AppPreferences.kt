@@ -46,8 +46,21 @@ class AppPreferences @Inject constructor(
     
     // Ollama Server Configuration
     var ollamaServerUrl: String
-        get() = preferences.getString(KEY_OLLAMA_SERVER_URL, "http://10.10.20.19:11434") ?: "http://10.10.20.19:11434"
+        get() = preferences.getString(KEY_OLLAMA_SERVER_URL, DEFAULT_OLLAMA_URL) ?: DEFAULT_OLLAMA_URL
         set(value) = preferences.edit().putString(KEY_OLLAMA_SERVER_URL, value).apply()
+    
+    // Tool Ollama Server (separate weak server for tools)
+    var enableToolOllamaServer: Boolean
+        get() = preferences.getBoolean(KEY_ENABLE_TOOL_OLLAMA, false)
+        set(value) = preferences.edit().putBoolean(KEY_ENABLE_TOOL_OLLAMA, value).apply()
+        
+    var toolOllamaServerUrl: String
+        get() = preferences.getString(KEY_TOOL_OLLAMA_SERVER_URL, DEFAULT_TOOL_OLLAMA_URL) ?: DEFAULT_TOOL_OLLAMA_URL
+        set(value) = preferences.edit().putString(KEY_TOOL_OLLAMA_SERVER_URL, value).apply()
+        
+    var toolOllamaModel: String
+        get() = preferences.getString(KEY_TOOL_OLLAMA_MODEL, DEFAULT_TOOL_MODEL) ?: DEFAULT_TOOL_MODEL
+        set(value) = preferences.edit().putString(KEY_TOOL_OLLAMA_MODEL, value).apply()
     
     companion object {
         private const val KEY_STREAMING_ENABLED = "streaming_enabled"
@@ -58,5 +71,12 @@ class AppPreferences @Inject constructor(
         private const val KEY_PERSONALITY_MODEL = "personality_model"
         private const val KEY_ENABLE_SPLIT_BRAIN = "enable_split_brain"
         private const val KEY_OLLAMA_SERVER_URL = "ollama_server_url"
+        private const val KEY_ENABLE_TOOL_OLLAMA = "enable_tool_ollama"
+        private const val KEY_TOOL_OLLAMA_SERVER_URL = "tool_ollama_server_url"
+        private const val KEY_TOOL_OLLAMA_MODEL = "tool_ollama_model"
+        
+        private const val DEFAULT_OLLAMA_URL = "http://10.10.20.19:11434"
+        private const val DEFAULT_TOOL_OLLAMA_URL = "http://10.10.20.120:11434"
+        private const val DEFAULT_TOOL_MODEL = "gemma-3-270m-it"
     }
 }

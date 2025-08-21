@@ -352,13 +352,6 @@ fun ChatMessageBubble(
     }
     
     var isThinkingExpanded by remember { mutableStateOf(false) }
-    
-    // Auto-expand thinking when there's thinking content
-    LaunchedEffect(message.thinkingContent) {
-        if (!message.thinkingContent.isNullOrBlank()) {
-            isThinkingExpanded = true
-        }
-    }
 
     Box(
         modifier = Modifier.fillMaxWidth(),
@@ -392,11 +385,23 @@ fun ChatMessageBubble(
                             horizontalArrangement = Arrangement.SpaceBetween,
                             verticalAlignment = Alignment.CenterVertically
                         ) {
-                            Text(
-                                text = "🤔 Thinking process",
-                                style = MaterialTheme.typography.labelMedium,
-                                color = textColor.copy(alpha = 0.8f)
-                            )
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(
+                                    text = "🤔 Thinking process",
+                                    style = MaterialTheme.typography.labelMedium,
+                                    color = textColor.copy(alpha = 0.8f)
+                                )
+                                // Show preview when collapsed
+                                if (!isThinkingExpanded && message.thinkingContent.length > 50) {
+                                    Text(
+                                        text = message.thinkingContent.take(50) + "...",
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = textColor.copy(alpha = 0.6f),
+                                        maxLines = 1,
+                                        modifier = Modifier.padding(top = 2.dp)
+                                    )
+                                }
+                            }
                             Icon(
                                 imageVector = if (isThinkingExpanded) Icons.Default.KeyboardArrowUp else Icons.Default.KeyboardArrowDown,
                                 contentDescription = if (isThinkingExpanded) "Collapse" else "Expand",
@@ -500,7 +505,7 @@ fun ProcessingIndicator(
                     horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
                     when (state) {
-                        ChatViewModel.ProcessingState.Scout -> {
+                        is ChatViewModel.ProcessingState.Scout -> {
                             Text(
                                 text = "🔍",
                                 modifier = Modifier
@@ -514,19 +519,19 @@ fun ProcessingIndicator(
                                 color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = alpha)
                             )
                         }
-                        ChatViewModel.ProcessingState.Tools -> {
+                        is ChatViewModel.ProcessingState.Tools -> {
                             Text(
                                 text = "🛠️",
                                 modifier = Modifier.alpha(alpha),
                                 fontSize = 16.sp
                             )
                             Text(
-                                text = "Running tools...",
+                                text = "Running ${state.toolName}...",
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = alpha)
                             )
                         }
-                        ChatViewModel.ProcessingState.Thinking -> {
+                        is ChatViewModel.ProcessingState.Thinking -> {
                             CircularProgressIndicator(
                                 modifier = Modifier.size(16.dp),
                                 color = MaterialTheme.colorScheme.primary,
@@ -538,7 +543,7 @@ fun ProcessingIndicator(
                                 color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = alpha)
                             )
                         }
-                        ChatViewModel.ProcessingState.Idle -> {
+                        is ChatViewModel.ProcessingState.Idle -> {
                             // No indicator when idle
                         }
                     }

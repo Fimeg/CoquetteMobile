@@ -5,6 +5,21 @@ import com.yourname.coquettemobile.core.models.ReasoningResult
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
+data class TaskPlan(
+    val steps: List<TaskStep>,
+    val estimatedComplexity: String,
+    val reasoning: String,
+    val modelUsed: String
+)
+
+data class TaskStep(
+    val stepNumber: Int,
+    val description: String,
+    val toolsRequired: List<String>,
+    val expectedOutput: String,
+    val dependencies: List<Int> = emptyList()
+)
+
 class SubconsciousReasoner(private val ollamaService: OllamaService) {
     
     suspend fun analyzeAndRefine(
@@ -67,6 +82,29 @@ class SubconsciousReasoner(private val ollamaService: OllamaService) {
             }
         } catch (e: Exception) {
             createFallbackReasoning(context, userRequest)
+        }
+    }
+    
+    suspend fun planComplexTask(
+        userRequest: String,
+        context: ReasoningContext,
+        availableTools: List<String>
+    ): TaskPlan = withContext(Dispatchers.Default) {
+        try {
+            val planningPrompt = createTaskPlanningPrompt(userRequest, context, availableTools)
+            
+            // Use the most capable model for planning
+            val modelToUse = selectBestPlanningModel(context.availableModels)
+            
+            val result = ollamaService.generateResponse(modelToUse, planningPrompt)
+            
+            if (result.isSuccess) {
+                parseTaskPlan(result.getOrThrow(), modelToUse)
+            } else {
+                createFallbackTaskPlan(userRequest, availableTools)
+            }
+        } catch (e: Exception) {
+            createFallbackTaskPlan(userRequest, availableTools)
         }
     }
     
@@ -140,6 +178,128 @@ class SubconsciousReasoner(private val ollamaService: OllamaService) {
             ),
             confidence = 0.5f,
             modelUsed = context.availableModels.firstOrNull() ?: "unknown"
+        )
+    }
+    
+    private fun createTaskPlanningPrompt(
+        userRequest: String,
+        context: ReasoningContext,
+        availableTools: List<String>
+    ): String {
+        return """
+        You are an expert task planner. Break down the user's request into a detailed, step-by-step plan.
+        
+        USER REQUEST: "$userRequest"
+        
+        AVAILABLE TOOLS: ${availableTools.joinToString(", ")}
+        
+        CONVERSATION CONTEXT (recent messages):
+        ${context.conversationHistory.takeLast(3).joinToString("\n") { "${it.type}: ${it.content}" }}
+        
+        Create a detailed execution plan that:
+        1. Breaks the task into logical steps
+        2. Identifies which tools are needed for each step
+        3. Specifies expected outputs
+        4. Notes dependencies between steps
+        5. Estimates task complexity (Low/Medium/High)
+        
+        Format your response as JSON:
+        {
+            "complexity": "Low|Medium|High",
+            "reasoning": "Brief explanation of the approach",
+            "steps": [
+                {
+                    "step": 1,
+                    "description": "What to do",
+                    "tools": ["ToolName"],
+                    "expected_output": "What this step produces",
+                    "dependencies": []
+                }
+            ]
+        }
+        
+        For complex tasks requiring multiple web searches, data analysis, or content synthesis, create comprehensive multi-step plans.
+        """.trimIndent()
+    }
+    
+    private fun selectBestPlanningModel(availableModels: List<String>): String {
+        // Prefer larger, more capable models for complex planning
+        return when {
+            availableModels.any { it.contains("deepseek-r1:32b", ignoreCase = true) } ->
+                availableModels.first { it.contains("deepseek-r1:32b", ignoreCase = true) }
+            availableModels.any { it.contains("qwen3:30b", ignoreCase = true) } ->
+                availableModels.first { it.contains("qwen3:30b", ignoreCase = true) }
+            availableModels.any { it.contains("deepseek", ignoreCase = true) } ->
+                availableModels.first { it.contains("deepseek", ignoreCase = true) }
+            else -> availableModels.firstOrNull() ?: "gemma"
+        }
+    }
+    
+    private fun parseTaskPlan(response: String, modelUsed: String): TaskPlan {
+        return try {
+            // Parse JSON response
+            val jsonRegex = """\{.*\}""".toRegex(RegexOption.DOT_MATCHES_ALL)
+            val jsonMatch = jsonRegex.find(response)
+            
+            if (jsonMatch != null) {
+                val jsonText = jsonMatch.value
+                val json = org.json.JSONObject(jsonText)
+                
+                val complexity = json.optString("complexity", "Medium")
+                val reasoning = json.optString("reasoning", "Task breakdown completed")
+                val stepsArray = json.optJSONArray("steps")
+                
+                val steps = mutableListOf<TaskStep>()
+                if (stepsArray != null) {
+                    for (i in 0 until stepsArray.length()) {
+                        val stepObj = stepsArray.getJSONObject(i)
+                        val toolsArray = stepObj.optJSONArray("tools")
+                        val tools = if (toolsArray != null) {
+                            (0 until toolsArray.length()).map { toolsArray.getString(it) }
+                        } else emptyList()
+                        
+                        val depsArray = stepObj.optJSONArray("dependencies")
+                        val dependencies = if (depsArray != null) {
+                            (0 until depsArray.length()).map { depsArray.getInt(it) }
+                        } else emptyList()
+                        
+                        steps.add(TaskStep(
+                            stepNumber = stepObj.optInt("step", i + 1),
+                            description = stepObj.optString("description", "Execute step ${i + 1}"),
+                            toolsRequired = tools,
+                            expectedOutput = stepObj.optString("expected_output", "Step completion"),
+                            dependencies = dependencies
+                        ))
+                    }
+                }
+                
+                TaskPlan(
+                    steps = steps,
+                    estimatedComplexity = complexity,
+                    reasoning = reasoning,
+                    modelUsed = modelUsed
+                )
+            } else {
+                createFallbackTaskPlan(response, emptyList())
+            }
+        } catch (e: Exception) {
+            createFallbackTaskPlan("Parse error: ${e.message}", emptyList())
+        }
+    }
+    
+    private fun createFallbackTaskPlan(userRequest: String, availableTools: List<String>): TaskPlan {
+        return TaskPlan(
+            steps = listOf(
+                TaskStep(
+                    stepNumber = 1,
+                    description = "Handle user request: $userRequest",
+                    toolsRequired = availableTools.take(1),
+                    expectedOutput = "Basic response to user request"
+                )
+            ),
+            estimatedComplexity = "Low",
+            reasoning = "Fallback plan due to parsing or model error",
+            modelUsed = "fallback"
         )
     }
 }

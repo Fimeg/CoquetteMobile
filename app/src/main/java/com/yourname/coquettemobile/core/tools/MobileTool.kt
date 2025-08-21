@@ -11,6 +11,17 @@ interface MobileTool {
     val riskLevel: RiskLevel
     
     suspend fun execute(parameters: Map<String, Any>): ToolResult
+    
+    /**
+     * Get human-readable description of what this tool execution will do
+     */
+    fun getDescription(params: Map<String, Any>): String
+    
+    /**
+     * Validate parameters before execution
+     * @return null if valid, error message if invalid
+     */
+    fun validateParams(params: Map<String, Any>): String?
 }
 
 /**

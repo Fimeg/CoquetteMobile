@@ -14,6 +14,9 @@ import com.yourname.coquettemobile.core.repository.PersonalityRepository
 import com.yourname.coquettemobile.core.repository.ConversationRepository
 import com.yourname.coquettemobile.core.preferences.AppPreferences
 import com.yourname.coquettemobile.core.tools.DeviceContextTool
+import com.yourname.coquettemobile.core.tools.WebFetchTool
+import com.yourname.coquettemobile.core.tools.ExtractorTool
+import com.yourname.coquettemobile.core.tools.SummarizerTool
 import com.yourname.coquettemobile.core.tools.MobileToolRegistry
 import com.yourname.coquettemobile.core.tools.MobileToolsAgent
 import com.yourname.coquettemobile.core.prompt.PromptStateManager
@@ -22,6 +25,7 @@ import com.yourname.coquettemobile.core.prompt.MemoryStore
 import com.yourname.coquettemobile.core.prompt.SimpleMemoryStore
 import com.yourname.coquettemobile.core.prompt.SystemPromptManager
 import com.yourname.coquettemobile.core.ai.PlannerService
+import com.yourname.coquettemobile.core.logging.CoquetteLogger
 import dagger.Module
 import dagger.Provides
 import dagger.hilt.InstallIn
@@ -37,8 +41,11 @@ object AppModule {
 
     @Provides
     @Singleton
-    fun provideOllamaService(appPreferences: AppPreferences): OllamaService {
-        return OllamaService(appPreferences)
+    fun provideOllamaService(
+        appPreferences: AppPreferences,
+        logger: CoquetteLogger
+    ): OllamaService {
+        return OllamaService(appPreferences, logger)
     }
 
     @Provides
@@ -118,8 +125,38 @@ object AppModule {
     
     @Provides
     @Singleton
-    fun provideMobileToolRegistry(deviceContextTool: DeviceContextTool): MobileToolRegistry {
-        return MobileToolRegistry(deviceContextTool)
+    fun provideWebFetchTool(
+        appPreferences: AppPreferences,
+        logger: CoquetteLogger
+    ): WebFetchTool {
+        return WebFetchTool(appPreferences, logger)
+    }
+    
+    @Provides
+    @Singleton
+    fun provideExtractorTool(): ExtractorTool {
+        return ExtractorTool()
+    }
+    
+    @Provides
+    @Singleton
+    fun provideSummarizerTool(
+        ollamaService: OllamaService,
+        appPreferences: AppPreferences,
+        logger: CoquetteLogger
+    ): SummarizerTool {
+        return SummarizerTool(ollamaService, appPreferences, logger)
+    }
+    
+    @Provides
+    @Singleton
+    fun provideMobileToolRegistry(
+        deviceContextTool: DeviceContextTool,
+        webFetchTool: WebFetchTool,
+        extractorTool: ExtractorTool,
+        summarizerTool: SummarizerTool
+    ): MobileToolRegistry {
+        return MobileToolRegistry(deviceContextTool, webFetchTool, extractorTool, summarizerTool)
     }
     
     @Provides
@@ -164,9 +201,21 @@ object AppModule {
         return SystemPromptManager(context)
     }
     
+    @Provides
+    @Singleton
+    fun provideCoquetteLogger(@ApplicationContext context: Context): CoquetteLogger {
+        return CoquetteLogger(context)
+    }
+    
     @EntryPoint
     @InstallIn(SingletonComponent::class)
     interface AppPreferencesEntryPoint {
         fun appPreferences(): AppPreferences
+    }
+    
+    @EntryPoint
+    @InstallIn(SingletonComponent::class)
+    interface CoquetteLoggerEntryPoint {
+        fun logger(): CoquetteLogger
     }
 }

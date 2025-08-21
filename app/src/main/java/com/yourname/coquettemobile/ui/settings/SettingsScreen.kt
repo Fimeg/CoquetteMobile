@@ -41,6 +41,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.yourname.coquettemobile.ui.chat.ChatViewModel
 import com.yourname.coquettemobile.core.preferences.AppPreferences
+import com.yourname.coquettemobile.di.AppModule
 import dagger.hilt.android.EntryPointAccessors
 import androidx.compose.ui.platform.LocalContext
 
@@ -63,6 +64,10 @@ fun SettingsScreen(
     val selectedPersonality by viewModel.selectedPersonality.collectAsStateWithLifecycle()
     val enableStreaming by viewModel.isStreamingEnabled.collectAsStateWithLifecycle()
     val availableModels by viewModel.availableModels.collectAsStateWithLifecycle()
+    val availablePlannerModels by viewModel.availablePlannerModels.collectAsStateWithLifecycle()
+    
+    // Debug logging
+    android.util.Log.d("SettingsScreen", "Available planner models in UI: $availablePlannerModels")
     
     var enableSubconsciousReasoning by remember { mutableStateOf(appPreferences.enableSubconsciousReasoning) }
     var enableModelRouting by remember { mutableStateOf(appPreferences.enableModelRouting) }
@@ -76,6 +81,10 @@ fun SettingsScreen(
     
     var showServerDialog by remember { mutableStateOf(false) }
     var serverUrlInput by remember { mutableStateOf(appPreferences.ollamaServerUrl) }
+    
+    var enableToolServer by remember { mutableStateOf(appPreferences.enableToolOllamaServer) }
+    var showToolServerDialog by remember { mutableStateOf(false) }
+    var toolServerUrlInput by remember { mutableStateOf(appPreferences.toolOllamaServerUrl) }
 
     Scaffold(
         topBar = {
@@ -135,6 +144,62 @@ fun SettingsScreen(
                             contentDescription = "Edit server URL",
                             tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
                         )
+                    }
+                    
+                    // Tool Server Toggle
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Column {
+                            Text(
+                                text = "Enable Tool Server",
+                                style = MaterialTheme.typography.bodyMedium
+                            )
+                            Text(
+                                text = "Use separate server for fast tool operations",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
+                            )
+                        }
+                        Switch(
+                            checked = enableToolServer,
+                            onCheckedChange = { 
+                                enableToolServer = it
+                                appPreferences.enableToolOllamaServer = it
+                                viewModel.loadAvailableModels() // Reload all models when toggled
+                            }
+                        )
+                    }
+                    
+                    // Tool Server URL (only show if enabled)
+                    if (enableToolServer) {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable { showToolServerDialog = true }
+                                .padding(vertical = 8.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.SpaceBetween
+                        ) {
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(
+                                    text = "Tool Server URL",
+                                    style = MaterialTheme.typography.bodyMedium
+                                )
+                                Text(
+                                    text = appPreferences.toolOllamaServerUrl,
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
+                                )
+                            }
+                            Icon(
+                                Icons.Default.Edit,
+                                contentDescription = "Edit tool server URL",
+                                tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
+                            )
+                        }
                     }
                     
                     Text(
@@ -326,7 +391,7 @@ fun SettingsScreen(
                                     expanded = showPlannerDropdown,
                                     onDismissRequest = { showPlannerDropdown = false }
                                 ) {
-                                    availableModels.forEach { model ->
+                                    availablePlannerModels.forEach { model ->
                                         DropdownMenuItem(
                                             text = { Text(model) },
                                             onClick = {
@@ -419,6 +484,53 @@ fun SettingsScreen(
                             Icons.Default.KeyboardArrowRight,
                             contentDescription = "Manage personalities",
                             tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
+                        )
+                    }
+                }
+            }
+
+            // Debug & Logs
+            Card(
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Column(
+                    modifier = Modifier.padding(16.dp),
+                    verticalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    Text(
+                        text = "Debug & Logs",
+                        style = MaterialTheme.typography.titleMedium
+                    )
+                    
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable { 
+                                // Get logger and clear logs  
+                                val logger = dagger.hilt.android.EntryPointAccessors
+                                    .fromApplication(context.applicationContext, AppModule.CoquetteLoggerEntryPoint::class.java)
+                                    .logger()
+                                logger.clearAllLogs()
+                            }
+                            .padding(vertical = 8.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Column {
+                            Text(
+                                text = "Clear Debug Logs",
+                                style = MaterialTheme.typography.bodyMedium
+                            )
+                            Text(
+                                text = "Remove all stored debug logs (kept for 7 days)",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
+                            )
+                        }
+                        Text(
+                            text = "Clear",
+                            style = MaterialTheme.typography.labelMedium,
+                            color = MaterialTheme.colorScheme.primary
                         )
                     }
                 }
@@ -538,6 +650,58 @@ fun SettingsScreen(
                     onClick = { 
                         serverUrlInput = appPreferences.ollamaServerUrl // Reset to current value
                         showServerDialog = false 
+                    }
+                ) {
+                    Text("Cancel")
+                }
+            }
+        )
+    }
+    
+    // Tool Server URL Edit Dialog
+    if (showToolServerDialog) {
+        AlertDialog(
+            onDismissRequest = { showToolServerDialog = false },
+            title = { Text("Edit Tool Server URL") },
+            text = {
+                Column {
+                    Text(
+                        text = "Enter the tool server URL (for fast planning & tools):",
+                        style = MaterialTheme.typography.bodyMedium,
+                        modifier = Modifier.padding(bottom = 8.dp)
+                    )
+                    OutlinedTextField(
+                        value = toolServerUrlInput,
+                        onValueChange = { toolServerUrlInput = it },
+                        label = { Text("Tool Server URL") },
+                        placeholder = { Text("http://192.168.1.120:11434") },
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                    Text(
+                        text = "Should be a separate server with lightweight models for fast responses",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
+                        modifier = Modifier.padding(top = 4.dp)
+                    )
+                }
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        appPreferences.toolOllamaServerUrl = toolServerUrlInput.trim()
+                        viewModel.loadAvailableModels() // Reload all models after URL change
+                        showToolServerDialog = false
+                    }
+                ) {
+                    Text("Save")
+                }
+            },
+            dismissButton = {
+                TextButton(
+                    onClick = { 
+                        toolServerUrlInput = appPreferences.toolOllamaServerUrl // Reset to current value
+                        showToolServerDialog = false 
                     }
                 ) {
                     Text("Cancel")

@@ -22,7 +22,8 @@ class DeviceContextTool @Inject constructor(
     override val name = "device_context"
     override val description = "Get comprehensive device status, battery, storage, network, and system information"
     override val requiredPermissions = listOf(
-        "android.permission.ACCESS_NETWORK_STATE"
+        "android.permission.ACCESS_NETWORK_STATE",
+        "android.permission.READ_PHONE_STATE"
     )
     override val riskLevel = RiskLevel.LOW
     
@@ -144,7 +145,9 @@ class DeviceContextTool @Inject constructor(
         if (connectionType == "Cellular") {
             val telephonyManager = context.getSystemService(Context.TELEPHONY_SERVICE) as TelephonyManager
             try {
+                @Suppress("MissingPermission")
                 val networkOperator = telephonyManager.networkOperatorName
+                @Suppress("MissingPermission")
                 val networkType = telephonyManager.dataNetworkType
                 networkInfo += "\n• Carrier: $networkOperator"
                 networkInfo += "\n• Technology: ${getNetworkTypeDescription(networkType)}"
@@ -288,6 +291,20 @@ class DeviceContextTool @Inject constructor(
             "• No specific recommendations"
         } else {
             recommendations.joinToString("\n")
+        }
+    }
+    
+    override fun getDescription(params: Map<String, Any>): String {
+        val action = params["action"] as? String ?: "all"
+        return "Getting device $action information"
+    }
+    
+    override fun validateParams(params: Map<String, Any>): String? {
+        val action = params["action"] as? String
+        return when {
+            action == null -> null // action is optional
+            action in listOf("all", "battery", "storage", "network", "system", "performance") -> null
+            else -> "Invalid action: $action. Must be one of: all, battery, storage, network, system, performance"
         }
     }
 }

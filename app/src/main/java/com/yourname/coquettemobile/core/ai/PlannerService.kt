@@ -34,14 +34,25 @@ class PlannerService @Inject constructor(
         val plannerPrompt = buildPlannerPrompt(userTurn, conversationSummary)
         
         try {
-            val response = ollamaService.sendMessage(
-                message = plannerPrompt,
+            val response = ollamaService.generateResponse(
                 model = plannerModel,
-                systemPrompt = getPlannerSystemPrompt(),
-                streaming = false
+                prompt = "${getPlannerSystemPrompt()}\n\n$plannerPrompt",
+                options = mapOf(
+                    "temperature" to 0.1,
+                    "num_ctx" to 1024,
+                    "num_predict" to 512
+                ),
+                useToolServer = true
             )
             
-            parseDecision(response.content)
+            if (response.isFailure) {
+                throw Exception(response.exceptionOrNull()?.message ?: "Planner request failed")
+            }
+            
+            val rawResponse = response.getOrThrow()
+            android.util.Log.d("PlannerService", "Raw planner response: $rawResponse")
+            
+            parseDecision(rawResponse)
         } catch (e: Exception) {
             // Fallback: assume we should respond with personality
             PlannerDecision(
@@ -65,21 +76,57 @@ class PlannerService @Inject constructor(
 
     private fun getPlannerSystemPrompt(): String {
         return """
-You are the Planner. Your job is to decide whether to call a tool or pass control to the Personality. Output valid JSON only, no extra text.
+You are the Planner. Your job is to decide whether to call tools or pass control to the Personality. Output valid JSON only, no extra text.
 
 You have access to these tools:
 - DeviceContextTool(action: "battery"|"storage"|"network"|"system"|"performance", args:{})
-- WebFetchTool(action: "get"|"search", args:{ url?:string, query?:string, site?:string })
-- ExtractorTool(action: "readability", args:{ html?:string, url?:string })
-- SummarizerTool(action: "bullets", args:{ text:string, target_tokens?:number })
+- WebFetchTool(args:{ url:string })
+- ExtractorTool(args:{ html:string })
+- SummarizerTool(args:{ text:string, format?:"bullets"|"paragraph"|"headlines", target_length?:number })
 
 Rules:
-- If the user asks for device info or web content, prefer tools
-- Chain tools when necessary: fetch → extract → summarize
-- Keep args minimal; no commentary
-- If a tool isn't needed, return {"decision":"respond","reason":"..."}
+- For complex requests, create multi-step tool chains
+- Chain tools strategically: fetch → extract → summarize, or multiple fetches for comparison
+- For research tasks, plan multiple sources and synthesis
+- For analysis tasks, break down into discrete data gathering steps
+- If no tools needed, return {"decision":"respond","reason":"..."}
 
 Examples:
+
+User: "Compare the latest news from TechCrunch and Ars Technica"
+Output:
+{
+  "decision":"tool",
+  "reason":"Multi-source news comparison requires fetching from both sites",
+  "tool":"WebFetchTool",
+  "action":"get",
+  "args":{"url":"https://techcrunch.com/"},
+  "followup_plan":[
+    {"expect":"html","next_tool":"ExtractorTool"},
+    {"expect":"readable_text","next_tool":"SummarizerTool"},
+    {"expect":"summary","next_tool":"WebFetchTool","args":{"url":"https://arstechnica.com/"}},
+    {"expect":"html","next_tool":"ExtractorTool"},
+    {"expect":"readable_text","next_tool":"SummarizerTool"}
+  ]
+}
+
+User: "Research the latest AI developments and create a comprehensive report"
+Output:
+{
+  "decision":"tool",
+  "reason":"Comprehensive research requires multiple sources and analysis",
+  "tool":"WebFetchTool",
+  "action":"get",
+  "args":{"url":"https://arxiv.org/list/cs.AI/recent"},
+  "followup_plan":[
+    {"expect":"html","next_tool":"ExtractorTool"},
+    {"expect":"readable_text","next_tool":"WebFetchTool","args":{"url":"https://openai.com/blog/"}},
+    {"expect":"html","next_tool":"ExtractorTool"},
+    {"expect":"readable_text","next_tool":"WebFetchTool","args":{"url":"https://ai.googleblog.com/"}},
+    {"expect":"html","next_tool":"ExtractorTool"},
+    {"expect":"readable_text","next_tool":"SummarizerTool","args":{"format":"bullets","target_length":10}}
+  ]
+}
 
 User: "What's on Slashdot today?"
 Output:
@@ -101,12 +148,13 @@ Output:
 
 User: "Tell me a story about a lighthouse."
 Output:
-{"decision":"respond","reason":"No tool needed"}
+{"decision":"respond","reason":"Creative writing task - no tools needed"}
         """.trimIndent()
     }
 
     private fun parseDecision(jsonResponse: String): PlannerDecision {
         return try {
+            android.util.Log.d("PlannerService", "Parsing JSON: ${jsonResponse.trim()}")
             val json = JSONObject(jsonResponse.trim())
             
             val decision = json.getString("decision")
@@ -133,6 +181,8 @@ Output:
                 )
             }
         } catch (e: Exception) {
+            android.util.Log.e("PlannerService", "JSON parsing failed: ${e.message}")
+            android.util.Log.e("PlannerService", "Failed JSON: $jsonResponse")
             // JSON parsing failed - try to repair or fallback
             repairAndParseDecision(jsonResponse) ?: PlannerDecision(
                 decision = "respond",
@@ -176,7 +226,31 @@ Output:
             .trim()
 
         return try {
-            parseDecision(cleaned)
+            // Direct JSON parsing without recursion
+            val json = JSONObject(cleaned.trim())
+            val decision = json.getString("decision")
+            val reason = json.getString("reason")
+            
+            if (decision == "tool") {
+                val tool = json.optString("tool")
+                val action = json.optString("action")
+                val args = parseArgs(json.optJSONObject("args"))
+                val followupPlan = parseFollowupPlan(json.optJSONArray("followup_plan"))
+                
+                PlannerDecision(
+                    decision = decision,
+                    reason = reason,
+                    tool = tool,
+                    action = action,
+                    args = args,
+                    followupPlan = followupPlan
+                )
+            } else {
+                PlannerDecision(
+                    decision = decision,
+                    reason = reason
+                )
+            }
         } catch (e: Exception) {
             // If still fails, try to extract decision from text
             when {

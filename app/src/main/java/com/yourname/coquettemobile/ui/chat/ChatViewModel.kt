@@ -6,6 +6,7 @@ import com.yourname.coquettemobile.core.ai.IntelligenceRouter
 import com.yourname.coquettemobile.core.ai.OllamaService
 import com.yourname.coquettemobile.core.ai.PersonalityProvider
 import com.yourname.coquettemobile.core.ai.SubconsciousReasoner
+import com.yourname.coquettemobile.core.ai.PlannerFollowup
 import com.yourname.coquettemobile.core.models.ChatMessage
 import com.yourname.coquettemobile.core.models.MessageType
 import com.yourname.coquettemobile.core.database.entities.Personality
@@ -56,11 +57,11 @@ class ChatViewModel @Inject constructor(
     private val _processingState = MutableStateFlow<ProcessingState>(ProcessingState.Idle)
     val processingState: StateFlow<ProcessingState> = _processingState.asStateFlow()
     
-    enum class ProcessingState {
-        Idle,
-        Scout,      // Scout is planning/routing
-        Thinking,   // AI model is generating response
-        Tools       // Tools are being executed
+    sealed class ProcessingState {
+        object Idle : ProcessingState()
+        object Scout : ProcessingState()  // Scout is planning/routing
+        object Thinking : ProcessingState()  // AI model is generating response
+        data class Tools(val toolName: String) : ProcessingState()  // Specific tool being executed
     }
 
     private val _availablePersonalities = MutableStateFlow<List<Personality>>(emptyList())
@@ -71,6 +72,9 @@ class ChatViewModel @Inject constructor(
     
     private val _availableModels = MutableStateFlow<List<String>>(emptyList())
     val availableModels: StateFlow<List<String>> = _availableModels.asStateFlow()
+    
+    private val _availablePlannerModels = MutableStateFlow<List<String>>(emptyList())
+    val availablePlannerModels: StateFlow<List<String>> = _availablePlannerModels.asStateFlow()
     
     private val _selectedModel = MutableStateFlow("auto")
     val selectedModel: StateFlow<String> = _selectedModel.asStateFlow()
@@ -99,7 +103,7 @@ class ChatViewModel @Inject constructor(
             // Initialize module registry
             moduleRegistry.initialize()
             
-            // Update tool awareness module from SystemPromptManager
+            // Force refresh of tool awareness from SystemPromptManager
             moduleRegistry.register("ToolAwareness", systemPromptManager.toolAwarenessPrompt)
             
             // Initialize prompt state manager with user-configurable prompts
@@ -296,16 +300,66 @@ class ChatViewModel @Inject constructor(
         _selectedModel.value = model
     }
     
-    private fun loadAvailableModels() {
+    fun loadAvailableModels() {
         viewModelScope.launch {
             try {
                 _connectionStatus.value = "Connecting..."
+                
+                // Load main server models
                 val models = ollamaService.getAvailableModels()
                 _availableModels.value = listOf("auto") + models
+                
+                // Load planner models (from tool server if enabled)
+                android.util.Log.d("ChatViewModel", "Initial load: tool server enabled = ${appPreferences.enableToolOllamaServer}")
+                val plannerModels = if (appPreferences.enableToolOllamaServer) {
+                    android.util.Log.d("ChatViewModel", "Initial load from tool server")
+                    ollamaService.getAvailableModels(useToolServer = true)
+                } else {
+                    android.util.Log.d("ChatViewModel", "Initial load from main server")
+                    models // Use same models if tool server disabled
+                }
+                android.util.Log.d("ChatViewModel", "Initial planner models: $plannerModels")
+                _availablePlannerModels.value = emptyList() // Force update
+                
+                // If tool server returns empty models, provide fallbacks
+                val finalPlannerModels = if (plannerModels.isEmpty() && appPreferences.enableToolOllamaServer) {
+                    listOf("hf.co/unsloth/gemma-3-270m-it-GGUF:F16", "gemma3n:e4b", "deepseek-r1:1.5b") // Tool server fallbacks
+                } else if (plannerModels.isEmpty()) {
+                    models // Use main server models if tool server disabled
+                } else {
+                    plannerModels // Use actual tool server models
+                }
+                
+                _availablePlannerModels.value = finalPlannerModels
+                
                 _connectionStatus.value = if (models.isNotEmpty()) "Connected" else "No models found"
             } catch (e: Exception) {
                 _connectionStatus.value = "Connection failed"
                 _availableModels.value = listOf("auto")
+                // Always include a fallback model for tool server
+                _availablePlannerModels.value = listOf("hf.co/unsloth/gemma-3-270m-it-GGUF:F16", "gemma3n:e4b", "deepseek-r1:1.5b") // Fallback models
+            }
+        }
+    }
+    
+    fun refreshPlannerModels() {
+        viewModelScope.launch {
+            try {
+                android.util.Log.d("ChatViewModel", "Refreshing planner models, tool server enabled: ${appPreferences.enableToolOllamaServer}")
+                val plannerModels = if (appPreferences.enableToolOllamaServer) {
+                    android.util.Log.d("ChatViewModel", "Loading planner models from tool server")
+                    ollamaService.getAvailableModels(useToolServer = true)
+                } else {
+                    android.util.Log.d("ChatViewModel", "Loading planner models from main server")
+                    ollamaService.getAvailableModels(useToolServer = false)
+                }
+                android.util.Log.d("ChatViewModel", "Planner models loaded: $plannerModels")
+                _availablePlannerModels.value = emptyList() // Force update
+                _availablePlannerModels.value = plannerModels
+            } catch (e: Exception) {
+                android.util.Log.e("ChatViewModel", "Failed to load planner models: ${e.message}")
+                // Always include a fallback model for tool server
+                _availablePlannerModels.value = listOf("hf.co/unsloth/gemma-3-270m-it-GGUF:F16", "gemma3n:e4b", "deepseek-r1:1.5b") // Fallback models
             }
         }
     }
@@ -338,6 +392,108 @@ class ChatViewModel @Inject constructor(
         _currentStreamingMessage.value = null
         viewModelScope.launch {
             createNewConversation()
+        }
+    }
+    
+    private fun detectComplexTask(message: String): Boolean {
+        val complexKeywords = listOf(
+            "compare", "research", "analyze", "comprehensive", "detailed analysis",
+            "multiple sources", "in-depth", "thorough investigation", "report",
+            "study", "examine", "investigate", "compile", "synthesize",
+            "check", "look up", "find out", "get", "fetch", "latest", "news"
+        )
+        
+        val wordCount = message.split(" ").size
+        val hasComplexKeywords = complexKeywords.any { keyword ->
+            message.contains(keyword, ignoreCase = true)
+        }
+        
+        // More sensitive detection - enable subconscious reasoning for web-related requests
+        val webRelatedKeywords = listOf("http", "www", ".com", ".org", "website", "site", "url")
+        val hasWebKeywords = webRelatedKeywords.any { keyword ->
+            message.contains(keyword, ignoreCase = true)
+        }
+        
+        return hasComplexKeywords || wordCount > 10 || hasWebKeywords
+    }
+    
+    private suspend fun buildReasoningContext(conversationId: String, userRequest: String): com.yourname.coquettemobile.core.models.ReasoningContext {
+        val conversationHistory = buildConversationHistoryForModel(conversationId)
+        return com.yourname.coquettemobile.core.models.ReasoningContext(
+            userRequest = userRequest,
+            conversationHistory = conversationHistory,
+            availableModels = _availableModels.value,
+            currentPersonality = _selectedPersonality.value?.name ?: "Default"
+        )
+    }
+    
+    private fun convertTaskPlanToDecision(taskPlan: com.yourname.coquettemobile.core.ai.TaskPlan, originalMessage: String): PlannerDecision {
+        if (taskPlan.steps.isEmpty()) {
+            return PlannerDecision(
+                decision = "respond",
+                reason = "No actionable steps in task plan"
+            )
+        }
+        
+        val firstStep = taskPlan.steps.first()
+        val remainingSteps = taskPlan.steps.drop(1)
+        
+        // Convert first step to primary tool execution
+        val primaryTool = firstStep.toolsRequired.firstOrNull() ?: return PlannerDecision(
+            decision = "respond",
+            reason = "No tools specified in first step"
+        )
+        
+        // Build followup plan from remaining steps
+        val followupPlan = remainingSteps.mapNotNull { step ->
+            step.toolsRequired.firstOrNull()?.let { toolName ->
+                PlannerFollowup(
+                    expect = step.expectedOutput,
+                    nextTool = toolName
+                )
+            }
+        }
+        
+        // Determine args based on tool and step description
+        val args = when (primaryTool) {
+            "WebFetchTool" -> {
+                // Extract URL from step description or use a default
+                val urlRegex = """https?://[^\s]+""".toRegex()
+                val url = urlRegex.find(firstStep.description)?.value 
+                    ?: extractImpliedUrl(firstStep.description, originalMessage)
+                mapOf("url" to url)
+            }
+            "DeviceContextTool" -> mapOf<String, Any>()
+            else -> mapOf<String, Any>()
+        }
+        
+        return PlannerDecision(
+            decision = "tool",
+            reason = "Complex task: ${taskPlan.reasoning}",
+            tool = primaryTool,
+            action = "execute",
+            args = args,
+            followupPlan = followupPlan
+        )
+    }
+    
+    private fun extractImpliedUrl(stepDescription: String, originalMessage: String): String {
+        // Try to extract or infer URLs from the description or original message
+        val urlRegex = """https?://[^\s]+""".toRegex()
+        
+        // First check original message
+        urlRegex.find(originalMessage)?.let { return it.value }
+        
+        // Then check step description
+        urlRegex.find(stepDescription)?.let { return it.value }
+        
+        // Fallback to common sites based on keywords
+        return when {
+            stepDescription.contains("news", ignoreCase = true) -> "https://news.google.com/"
+            stepDescription.contains("tech", ignoreCase = true) -> "https://techcrunch.com/"
+            stepDescription.contains("AI", ignoreCase = true) -> "https://openai.com/blog/"
+            stepDescription.contains("research", ignoreCase = true) -> "https://arxiv.org/"
+            else -> "https://www.google.com/search?q=${originalMessage.replace(" ", "+")}"
         }
     }
     
@@ -420,70 +576,287 @@ class ChatViewModel @Inject constructor(
     // --- Split-Brain Flow ---
     
     private suspend fun handleSplitBrainFlow(message: String, conversationId: String) {
+        android.util.Log.d("SplitBrainFlow", "=== STARTING SPLIT-BRAIN FLOW ===")
+        android.util.Log.d("SplitBrainFlow", "User message: '$message'")
+        
         try {
-            // Step 1: Use Planner to decide what to do
-            val conversationSummary = buildConversationSummary(conversationId)
-            val decision = plannerService.planAction(
-                userTurn = message,
-                conversationSummary = conversationSummary,
-                plannerModel = appPreferences.plannerModel
-            )
+            // Step 1: Check if we need subconscious reasoning for complex tasks
+            val needsComplexPlanning = detectComplexTask(message)
+            android.util.Log.d("SplitBrainFlow", "Complex planning needed: $needsComplexPlanning")
+            
+            var decision: PlannerDecision
+            
+            if (needsComplexPlanning && appPreferences.enableSubconsciousReasoning) {
+                android.util.Log.d("SplitBrainFlow", "Step 1A: Using SubconsciousReasoner for complex task...")
+                _processingState.value = ProcessingState.Scout
+                
+                val context = buildReasoningContext(conversationId, message)
+                val availableTools = listOf("DeviceContextTool", "WebFetchTool", "ExtractorTool", "SummarizerTool")
+                
+                val taskPlan = subconsciousReasoner.planComplexTask(message, context, availableTools)
+                android.util.Log.d("SplitBrainFlow", "Task plan: ${taskPlan.steps.size} steps, complexity: ${taskPlan.estimatedComplexity}")
+                
+                // Convert TaskPlan to PlannerDecision for execution
+                decision = convertTaskPlanToDecision(taskPlan, message)
+            } else {
+                android.util.Log.d("SplitBrainFlow", "Step 1B: Using standard planner...")
+                val conversationSummary = buildConversationSummary(conversationId)
+                android.util.Log.d("SplitBrainFlow", "Conversation summary: '$conversationSummary'")
+                
+                decision = plannerService.planAction(
+                    userTurn = message,
+                    conversationSummary = conversationSummary,
+                    plannerModel = appPreferences.plannerModel
+                )
+            }
+            
+            android.util.Log.d("SplitBrainFlow", "Planner decision: '${decision.decision}'")
+            android.util.Log.d("SplitBrainFlow", "Planner reasoning: '${decision.reason}'")
+            android.util.Log.d("SplitBrainFlow", "Tool: '${decision.tool}'")
+            android.util.Log.d("SplitBrainFlow", "Followup plan: ${decision.followupPlan.size} steps")
             
             when (decision.decision) {
                 "tool" -> {
-                    _processingState.value = ProcessingState.Tools
+                    android.util.Log.d("SplitBrainFlow", "→ Executing tool path")
+                    _processingState.value = ProcessingState.Tools("DeviceContextTool")
+                    // Update processing state to show specific tool
+                    decision.tool?.let { toolName ->
+                        // Could emit specific tool execution state here
+                        android.util.Log.d("SplitBrainFlow", "Executing tool: $toolName")
+                    }
                     handleToolExecution(decision, message, conversationId)
                 }
                 "respond" -> {
+                    android.util.Log.d("SplitBrainFlow", "→ Executing personality response path")
                     _processingState.value = ProcessingState.Thinking
                     handlePersonalityResponse(message, conversationId, decision.reason)
                 }
                 else -> {
+                    android.util.Log.w("SplitBrainFlow", "→ Unknown planner decision: '${decision.decision}'")
                     _processingState.value = ProcessingState.Thinking
-                    handlePersonalityResponse(message, conversationId, "Unknown planner decision")
+                    handlePersonalityResponse(message, conversationId, "Unknown planner decision: ${decision.decision}")
                 }
             }
         } catch (e: Exception) {
+            android.util.Log.e("SplitBrainFlow", "PLANNER EXCEPTION: ${e.message}", e)
             // Fallback to personality response
             handlePersonalityResponse(message, conversationId, "Planner error: ${e.message}")
         }
+        
+        android.util.Log.d("SplitBrainFlow", "=== SPLIT-BRAIN FLOW COMPLETE ===")
     }
     
     private suspend fun handleToolExecution(decision: PlannerDecision, message: String, conversationId: String) {
-        // Execute the tool using existing mobile tools agent
-        val toolResult = when (decision.tool) {
-            "DeviceContextTool" -> {
-                val action = decision.action ?: "all"
-                mobileToolsAgent.executeTools("device $action")
+        var currentData: String? = null
+        val executedTools = mutableListOf<String>()
+        val toolExecutionLog = StringBuilder()
+        
+        try {
+            // Execute primary tool
+            _processingState.value = ProcessingState.Tools(decision.tool ?: "Unknown Tool")
+            val initialResult = executeSpecificTool(decision.tool, decision.action, decision.args)
+            if (initialResult == null) {
+                handlePersonalityResponseWithToolContext(message, conversationId, null, "Tool execution failed")
+                return
             }
-            else -> {
-                // For now, fallback to existing tool detection
-                detectAndExecuteTools(message)
+            
+            currentData = getToolResultData(initialResult)
+            executedTools.add(decision.tool ?: "unknown")
+            toolExecutionLog.append("🔧 ${decision.tool}: ${initialResult.summary}\n")
+            
+            // Execute followup chain if specified
+            for (followup in decision.followupPlan) {
+                if (followup.nextTool == null || currentData == null) break
+                
+                // Update UI to show current tool
+                _processingState.value = ProcessingState.Tools(followup.nextTool)
+                
+                val chainedArgs = when (followup.nextTool) {
+                    "ExtractorTool" -> mapOf("html" to currentData)
+                    "SummarizerTool" -> {
+                        // Skip auto-summarization - let personality handle raw content
+                        android.util.Log.d("SplitBrainFlow", "Skipping auto-summarization, letting personality handle raw content")
+                        break
+                    }
+                    else -> mapOf("data" to currentData)
+                }
+                
+                val chainResult = executeSpecificTool(followup.nextTool, null, chainedArgs)
+                if (chainResult != null) {
+                    currentData = getToolResultData(chainResult)
+                    executedTools.add(followup.nextTool)
+                    toolExecutionLog.append("🔧 ${followup.nextTool}: ${chainResult.summary}\n")
+                } else {
+                    break // Stop chain on failure
+                }
             }
+            
+            // Create the tool execution context for personality with raw content
+            val toolContext = if (currentData != null) {
+                """## TOOL EXECUTION CONTEXT
+
+User requested: "$message"
+
+Tools executed successfully: ${executedTools.joinToString(" → ")}
+
+## RAW CONTENT FOR ANALYSIS:
+$currentData
+
+You have the raw content above. Please analyze, synthesize, and respond to the user's request using your personality and expertise. Do not just acknowledge that tools were run - actually process and present the information in a natural, helpful way."""
+            } else {
+                "Tools were executed but no usable content was retrieved."
+            }.trimIndent()
+            
+            // Pass tool context to personality for integrated response
+            handlePersonalityResponseWithToolContext(message, conversationId, toolContext, null)
+            
+        } catch (e: Exception) {
+            handlePersonalityResponseWithToolContext(message, conversationId, null, "Tool chain error: ${e.message}")
+        }
+    }
+    
+    private fun getToolResultData(result: com.yourname.coquettemobile.core.tools.ToolExecutionResult): String? {
+        return result.stepResults.firstOrNull()?.output ?: result.summary
+    }
+    
+    private suspend fun executeSpecificTool(toolName: String?, action: String?, args: Map<String, Any>): com.yourname.coquettemobile.core.tools.ToolExecutionResult? {
+        return try {
+            when (toolName) {
+                "DeviceContextTool" -> {
+                    val deviceAction = action ?: args["action"] as? String ?: "all"
+                    mobileToolsAgent.executeTools("device $deviceAction")
+                }
+                "WebFetchTool" -> {
+                    val url = args["url"] as? String
+                    if (url != null) {
+                        val webTool = mobileToolsAgent.toolRegistry.getTool("WebFetchTool")
+                        val result = webTool?.execute(args)
+                        if (result != null && result.success) {
+                            // Create a simplified ToolExecutionResult for chaining
+                            com.yourname.coquettemobile.core.tools.ToolExecutionResult(
+                                success = true,
+                                request = "fetch $url",
+                                plan = null,
+                                stepResults = listOf(result),
+                                summary = "Fetched content from: $url",
+                                executionTime = 0
+                            )
+                        } else null
+                    } else null
+                }
+                "ExtractorTool" -> {
+                    val html = args["html"] as? String
+                    if (html != null) {
+                        val extractorTool = mobileToolsAgent.toolRegistry.getTool("ExtractorTool")
+                        val result = extractorTool?.execute(args)
+                        if (result != null && result.success) {
+                            com.yourname.coquettemobile.core.tools.ToolExecutionResult(
+                                success = true,
+                                request = "extract html",
+                                plan = null,
+                                stepResults = listOf(result),
+                                summary = "Extracted readable text",
+                                executionTime = 0
+                            )
+                        } else null
+                    } else null
+                }
+                "SummarizerTool" -> {
+                    val text = args["text"] as? String
+                    if (text != null) {
+                        val summarizerTool = mobileToolsAgent.toolRegistry.getTool("SummarizerTool")
+                        val result = summarizerTool?.execute(args)
+                        if (result != null && result.success) {
+                            com.yourname.coquettemobile.core.tools.ToolExecutionResult(
+                                success = true,
+                                request = "summarize text",
+                                plan = null,
+                                stepResults = listOf(result),
+                                summary = "Created summary",
+                                executionTime = 0
+                            )
+                        } else null
+                    } else null
+                }
+                else -> {
+                    // Fallback to existing detection
+                    detectAndExecuteTools("Execute tool: $toolName")
+                }
+            }
+        } catch (e: Exception) {
+            null
+        }
+    }
+    
+    private suspend fun handlePersonalityResponseWithToolContext(
+        originalMessage: String,
+        conversationId: String,
+        toolContext: String? = null,
+        error: String? = null
+    ) {
+        // DEBUG: Check selected personality
+        android.util.Log.d("PersonalityDebug", "Selected personality: ${_selectedPersonality.value?.name}")
+        android.util.Log.d("PersonalityDebug", "Selected personality ID: ${_selectedPersonality.value?.id}")
+        
+        // Get the selected personality system prompt and combine with core identity
+        val selectedPersonalityPrompt = _selectedPersonality.value?.let { personality ->
+            val prompt = personalityProvider.getSystemPrompt(personality.id)
+            android.util.Log.d("PersonalityDebug", "Personality prompt length: ${prompt.length}")
+            android.util.Log.d("PersonalityDebug", "Personality prompt preview: ${prompt.take(200)}...")
+            prompt
+        } ?: personalityProvider.getSystemPrompt("default").also {
+            android.util.Log.d("PersonalityDebug", "Using default personality, length: ${it.length}")
         }
         
-        if (toolResult != null) {
-            // Update prompt state with tool result
-            promptStateManager.addToolResult(formatToolResult(toolResult))
-            
-            // Create tool result message
-            val toolMessage = ChatMessage(
-                id = UUID.randomUUID().toString(),
-                content = toolResult.summary,
-                type = MessageType.AI,
-                timestamp = System.currentTimeMillis(),
-                modelUsed = decision.tool ?: "tools",
-                conversationId = conversationId
-            )
-            
-            _chatMessages.value = _chatMessages.value + toolMessage
-            conversationRepository.saveMessage(toolMessage, conversationId)
-            
-            // Now use personality model to comment on the tool result
-            handlePersonalityResponse(message, conversationId, null, hasToolResult = true)
+        // Build combined prompt: Core identity + Selected personality
+        val coreIdentity = systemPromptManager.corePersonalityPrompt
+        android.util.Log.d("PersonalityDebug", "Core identity length: ${coreIdentity.length}")
+        
+        val combinedSystemPrompt = if (selectedPersonalityPrompt.isNotBlank()) {
+            "$coreIdentity\n\n## ACTIVE PERSONALITY\n$selectedPersonalityPrompt"
         } else {
-            // Tool execution failed, use personality to respond
-            handlePersonalityResponse(message, conversationId, "Tool execution failed")
+            coreIdentity
+        }
+        android.util.Log.d("PersonalityDebug", "Combined system prompt length: ${combinedSystemPrompt.length}")
+        
+        // Add tool context to system prompt
+        val toolAwareSystemPrompt = if (toolContext != null) {
+            """$combinedSystemPrompt
+            
+## TOOL EXECUTION CONTEXT
+$toolContext
+
+Respond to the user's request naturally, incorporating the tool results as appropriate for your personality. Present the information in a way that feels conversational and helpful."""
+        } else if (error != null) {
+            """$combinedSystemPrompt
+            
+## TOOL EXECUTION ERROR
+$error
+
+Respond to the user's request, acknowledging that the requested tools couldn't complete successfully."""
+        } else {
+            combinedSystemPrompt
+        }
+        
+        // Build the system prompt using PromptStateManager with personality override
+        val systemPrompt = promptStateManager.buildSystemPrompt(toolAwareSystemPrompt)
+        android.util.Log.d("PersonalityDebug", "Final system prompt length: ${systemPrompt.length}")
+        android.util.Log.d("PersonalityDebug", "Final system prompt preview: ${systemPrompt.take(500)}...")
+        
+        // Create a message that includes original user message for proper context
+        val contextualMessage = if (toolContext != null || error != null) {
+            originalMessage // The personality responds to the original message with tool context
+        } else {
+            originalMessage
+        }
+        
+        // Use personality model to generate response
+        val personalityModel = appPreferences.personalityModel
+        
+        if (_isStreamingEnabled.value) {
+            handlePersonalityStreamingResponse(contextualMessage, systemPrompt, personalityModel, conversationId)
+        } else {
+            handlePersonalityNormalResponse(contextualMessage, systemPrompt, personalityModel, conversationId)
         }
     }
     
@@ -493,36 +866,11 @@ class ChatViewModel @Inject constructor(
         plannerNote: String? = null,
         hasToolResult: Boolean = false
     ) {
-        // Set planner note if any
-        promptStateManager.setPlannerNote(plannerNote)
-        
-        // Get the selected personality system prompt and combine with core identity
-        val selectedPersonalityPrompt = _selectedPersonality.value?.let { personality ->
-            personalityProvider.getSystemPrompt(personality.id)
-        } ?: personalityProvider.getSystemPrompt("default")
-        
-        // Build combined prompt: Core identity + Selected personality
-        val coreIdentity = systemPromptManager.corePersonalityPrompt
-        val combinedSystemPrompt = if (selectedPersonalityPrompt.isNotBlank()) {
-            "$coreIdentity\n\n## ACTIVE PERSONALITY\n$selectedPersonalityPrompt"
-        } else {
-            coreIdentity
-        }
-        
-        // Build the personality prompt using PromptStateManager with personality override
-        val personalityPrompt = promptStateManager.buildPersonalityPrompt(message, combinedSystemPrompt)
-        
-        // Use personality model to generate response
-        val personalityModel = appPreferences.personalityModel
-        
-        if (_isStreamingEnabled.value) {
-            handleSplitBrainStreamingResponse(personalityPrompt, personalityModel, conversationId)
-        } else {
-            handleSplitBrainNormalResponse(personalityPrompt, personalityModel, conversationId)
-        }
+        // Fallback to context-aware method
+        handlePersonalityResponseWithToolContext(message, conversationId, null, plannerNote)
     }
     
-    private suspend fun handleSplitBrainStreamingResponse(prompt: String, model: String, conversationId: String) {
+    private suspend fun handlePersonalityStreamingResponse(message: String, systemPrompt: String, model: String, conversationId: String) {
         val aiMessageId = UUID.randomUUID().toString()
         val aiMessage = ChatMessage(
             id = aiMessageId,
@@ -544,7 +892,7 @@ class ChatViewModel @Inject constructor(
             ollamaService.sendChatMessageStream(
                 messages = conversationHistory,
                 model = model,
-                systemPrompt = prompt // Pass as system prompt for chat completion
+                systemPrompt = systemPrompt // Pass as system prompt for chat completion
             ).collect { chunk ->
                 fullContentBuilder.append(chunk)
                 val currentText = fullContentBuilder.toString()
@@ -596,14 +944,14 @@ class ChatViewModel @Inject constructor(
         }
     }
     
-    private suspend fun handleSplitBrainNormalResponse(prompt: String, model: String, conversationId: String) {
+    private suspend fun handlePersonalityNormalResponse(message: String, systemPrompt: String, model: String, conversationId: String) {
         // Use chat completion with conversation history for personality model
         val conversationHistory = buildConversationHistoryForModel(conversationId)
         
         val parsedResponse = ollamaService.sendChatMessage(
             messages = conversationHistory,
             model = model,
-            systemPrompt = prompt // Pass as system prompt for chat completion
+            systemPrompt = systemPrompt // Pass as system prompt for chat completion
         )
         
         val aiMessage = ChatMessage(
@@ -657,10 +1005,21 @@ class ChatViewModel @Inject constructor(
             "qwen3:8b" // Default model when routing is disabled
         }
         
-        // Get system prompt
-        val systemPrompt = _selectedPersonality.value?.let { personality ->
+        // Get system prompt using same method as split-brain
+        val selectedPersonalityPrompt = _selectedPersonality.value?.let { personality ->
             personalityProvider.getSystemPrompt(personality.id)
         } ?: personalityProvider.getSystemPrompt("default")
+        
+        // Build combined prompt: Core identity + Selected personality
+        val coreIdentity = systemPromptManager.corePersonalityPrompt
+        val combinedSystemPrompt = if (selectedPersonalityPrompt.isNotBlank()) {
+            "$coreIdentity\n\n## ACTIVE PERSONALITY\n$selectedPersonalityPrompt"
+        } else {
+            coreIdentity
+        }
+        
+        // Build the system prompt using PromptStateManager
+        val systemPrompt = promptStateManager.buildSystemPrompt(combinedSystemPrompt)
         
         if (_isStreamingEnabled.value) {
             handleStreamingResponse(fullMessage, modelToUse, systemPrompt, conversationId)

@@ -73,12 +73,24 @@ Output: {"decision":"respond","reason":"No tool needed"}
     
     private fun getDefaultToolAwareness(): String {
         return """
-You never call tools directly. You may suggest checks ("let's check current battery info"), trusting the system to return TOOL_RESULT. Discuss tool data like reviewing information you just looked up.
+**AVAILABLE TOOLS:**
+I have access to these capabilities through the system:
 
-If the app injects TOOL_RESULT:
-- Summarize the essentials in 1–3 sentences
-- Add brief analysis or options if relevant
-- If data is long, highlight key points rather than dumping everything
+🔧 **Device Tools:**
+- Battery status, system info, storage, network, performance diagnostics
+- "Check my battery" or "How's my phone doing?" will get current device status
+
+🌐 **Web Tools:**
+- Fetch content from URLs, extract readable text, summarize long articles
+- "What's on [website]?" or "Summarize this article: [URL]" to get web content
+
+**How I Use Tools:**
+- I can suggest tool usage ("let me check your battery status")
+- The system handles tool execution and returns TOOL_RESULT to me
+- I interpret tool results naturally, like information I just looked up
+- I NEVER output JSON or tool commands directly
+
+If you ask about my capabilities, I can explain what tools are available and how to use them.
         """.trimIndent()
     }
     

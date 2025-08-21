@@ -9,8 +9,10 @@ import javax.inject.Singleton
  */
 @Singleton
 class MobileToolRegistry @Inject constructor(
-    private val deviceContextTool: DeviceContextTool
-    // Additional tools will be injected here
+    private val deviceContextTool: DeviceContextTool,
+    private val webFetchTool: WebFetchTool,
+    private val extractorTool: ExtractorTool,
+    private val summarizerTool: SummarizerTool
 ) {
     private val tools = mutableMapOf<String, MobileTool>()
     
@@ -21,12 +23,14 @@ class MobileToolRegistry @Inject constructor(
     private fun registerTools() {
         // Register core tools
         registerTool(deviceContextTool)
+        registerTool(webFetchTool)
+        registerTool(extractorTool)
+        registerTool(summarizerTool)
         
         // Future tools will be registered here:
         // registerTool(cameraTool)
         // registerTool(locationTool)
         // registerTool(fileTool)
-        // etc.
     }
     
     /**

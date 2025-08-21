@@ -14,7 +14,7 @@ import javax.inject.Singleton
  */
 @Singleton
 class MobileToolsAgent @Inject constructor(
-    private val toolRegistry: MobileToolRegistry,
+    val toolRegistry: MobileToolRegistry,
     private val ollamaService: OllamaService
 ) {
     

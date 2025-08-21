@@ -123,6 +123,46 @@ class PromptStateManager @Inject constructor(
 
         return builder.toString()
     }
+    
+    /**
+     * Build system-only prompt for chat completions (no user input)
+     */
+    fun buildSystemPrompt(personalityOverride: String? = null): String {
+        val builder = StringBuilder()
+        
+        // Use personality override if provided, otherwise use core identity
+        val baseIdentity = personalityOverride ?: coreIdentity
+        builder.append(baseIdentity).append("\n\n")
+
+        // Append active modules
+        _activeModules.value.forEach { mod ->
+            moduleRegistry.get(mod)?.let { 
+                builder.append("## MODULE: $mod\n")
+                builder.append(it).append("\n\n") 
+            }
+        }
+
+        // Append tool awareness (static module)
+        moduleRegistry.get("ToolAwareness")?.let { 
+            builder.append("## TOOL AWARENESS\n")
+            builder.append(it).append("\n\n") 
+        }
+
+        // Conversation summary
+        if (conversationSummary.isNotBlank()) {
+            builder.append("CONVERSATION_SUMMARY:\n$conversationSummary\n\n")
+        }
+
+        // Tool result (if present)
+        if (lastToolResults.isNotBlank()) {
+            builder.append("TOOL_RESULT:\n$lastToolResults\n\n")
+        }
+
+        // Planner note (if any)
+        plannerNote?.let { builder.append("PLANNER_NOTE: $it\n\n") }
+
+        return builder.toString().trim()
+    }
 
     fun buildPlannerPrompt(userTurn: String): String {
         val builder = StringBuilder()
