@@ -12,7 +12,10 @@ class ConversationTitleGenerator @Inject constructor(
     private val ollamaService: OllamaService
 ) {
     
-    suspend fun generateTitle(messages: List<ChatMessage>): String = withContext(Dispatchers.IO) {
+    suspend fun generateTitle(
+        messages: List<ChatMessage>,
+        modelToUse: String? = null
+    ): String = withContext(Dispatchers.IO) {
         try {
             // Get the first few messages to understand the conversation topic
             val contextMessages = messages.take(6).filter { 
@@ -45,11 +48,11 @@ class ConversationTitleGenerator @Inject constructor(
                 - "Math Problem Solving"
             """.trimIndent()
             
-            // Use a fast, lightweight model for title generation (preferably gemma3:2b if available)
-            val modelToUse = selectTitleGenerationModel()
+            // Use provided model or fallback to automatic selection
+            val finalModel = modelToUse ?: selectTitleGenerationModel()
             
             // Use smaller context for title generation since it's unimportant
-            val options = if (modelToUse.contains("gemma3n:e4b")) {
+            val options = if (modelToUse?.contains("gemma3n:e4b") == true) {
                 mapOf(
                     "num_ctx" to 1024,  // Small context for gemma3n:e4b
                     "temperature" to 0.3
@@ -59,7 +62,7 @@ class ConversationTitleGenerator @Inject constructor(
             }
             
             val response = ollamaService.generateResponse(
-                model = modelToUse,
+                model = finalModel,
                 prompt = "You are a helpful assistant that creates short, descriptive titles for conversations. Keep titles under 6 words and focus on the main topic.\n\n$titlePrompt",
                 options = options
             )
@@ -96,9 +99,9 @@ class ConversationTitleGenerator @Inject constructor(
         return try {
             val availableModels = ollamaService.getAvailableModels()
             
-            // Prefer gemma3n:e4b for title generation (lightweight, smart)
+            // Use Jan model if available (Unity architecture default)
             when {
-                availableModels.any { it.contains("gemma3n:e4b") } -> "gemma3n:e4b"
+                availableModels.any { it.contains("Jan-v1-4B") } -> availableModels.first { it.contains("Jan-v1-4B") }
                 availableModels.any { it.contains("qwen3:8b") } -> "qwen3:8b"
                 availableModels.isNotEmpty() -> availableModels.first()
                 else -> "qwen3:8b" // fallback

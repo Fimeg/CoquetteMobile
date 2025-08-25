@@ -13,6 +13,16 @@ interface MobileTool {
     suspend fun execute(parameters: Map<String, Any>): ToolResult
     
     /**
+     * Execute tool with streaming support for real-time progress updates
+     * @param parameters Tool parameters
+     * @param onProgress Callback for streaming progress updates
+     */
+    suspend fun executeStreaming(
+        parameters: Map<String, Any>,
+        onProgress: (String) -> Unit
+    ): ToolResult
+    
+    /**
      * Get human-readable description of what this tool execution will do
      */
     fun getDescription(params: Map<String, Any>): String
@@ -22,6 +32,12 @@ interface MobileTool {
      * @return null if valid, error message if invalid
      */
     fun validateParams(params: Map<String, Any>): String?
+    
+    /**
+     * Get parameter schema for dynamic prompt generation
+     * Inspired by desktop Coquette's function declaration patterns
+     */
+    fun getParameterSchema(): String
 }
 
 /**

@@ -11,7 +11,6 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
-import androidx.hilt.navigation.compose.hiltViewModel
 import com.yourname.coquettemobile.core.prompt.SystemPromptManager
 import dagger.hilt.android.EntryPointAccessors
 
@@ -27,158 +26,88 @@ fun SystemPromptsScreen(
             SystemPromptManagerEntryPoint::class.java
         ).systemPromptManager()
     }
-    
+
     var corePersonalityPrompt by remember { mutableStateOf(systemPromptManager.corePersonalityPrompt) }
-    var plannerSystemPrompt by remember { mutableStateOf(systemPromptManager.plannerSystemPrompt) }
-    var toolAwarenessPrompt by remember { mutableStateOf(systemPromptManager.toolAwarenessPrompt) }
-    
     var showResetDialog by remember { mutableStateOf(false) }
 
     Scaffold(
         topBar = {
             TopAppBar(
                 title = { Text("System Prompts") },
-                navigationIcon = {
-                    IconButton(onClick = onBackClick) {
-                        Icon(Icons.Default.ArrowBack, contentDescription = "Back")
-                    }
-                },
-                actions = {
-                    IconButton(
-                        onClick = { showResetDialog = true }
-                    ) {
-                        Icon(Icons.Default.Refresh, contentDescription = "Reset to defaults")
-                    }
-                }
+                      navigationIcon = {
+                          IconButton(onClick = onBackClick) {
+                              Icon(Icons.Default.ArrowBack, contentDescription = "Back")
+                          }
+                      },
+                      actions = {
+                          IconButton(
+                              onClick = { showResetDialog = true }
+                          ) {
+                              Icon(Icons.Default.Refresh, contentDescription = "Reset to defaults")
+                          }
+                      }
             )
         }
     ) { innerPadding ->
         Column(
             modifier = Modifier
-                .fillMaxSize()
-                .padding(innerPadding)
-                .verticalScroll(rememberScrollState())
-                .padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(16.dp)
+            .fillMaxSize()
+            .padding(innerPadding)
+            .verticalScroll(rememberScrollState())
+            .padding(16.dp),
+               verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
             Text(
-                text = "Edit the system prompts that control how the AI behaves. Changes are saved automatically.",
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
+                text = "Edit the core system prompt that controls the AI's base behavior. Changes are saved automatically.",
+                 style = MaterialTheme.typography.bodyMedium,
+                 color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
             )
-            
+
             // Core Personality Prompt
             Card(
                 modifier = Modifier.fillMaxWidth()
             ) {
                 Column(
                     modifier = Modifier.padding(16.dp),
-                    verticalArrangement = Arrangement.spacedBy(12.dp)
+                       verticalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
                     Text(
                         text = "Core Personality Prompt",
-                        style = MaterialTheme.typography.titleMedium
+                         style = MaterialTheme.typography.titleMedium
                     )
                     Text(
-                        text = "Defines the AI's personality, tone, and behavior in conversations.",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
+                        text = "Defines the AI's base personality, tone, and behavior in all conversations.",
+                         style = MaterialTheme.typography.bodySmall,
+                         color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
                     )
-                    
+
                     OutlinedTextField(
                         value = corePersonalityPrompt,
-                        onValueChange = { 
+                        onValueChange = {
                             corePersonalityPrompt = it
                             systemPromptManager.corePersonalityPrompt = it
                         },
                         modifier = Modifier
-                            .fillMaxWidth()
-                            .height(200.dp),
-                        placeholder = { Text("Enter core personality prompt...") },
-                        maxLines = 10
+                        .fillMaxWidth()
+                        .height(250.dp),
+                                      placeholder = { Text("Enter core personality prompt...") }
                     )
                 }
             }
 
-            // Planner System Prompt
-            Card(
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                Column(
-                    modifier = Modifier.padding(16.dp),
-                    verticalArrangement = Arrangement.spacedBy(12.dp)
-                ) {
-                    Text(
-                        text = "Planner System Prompt",
-                        style = MaterialTheme.typography.titleMedium
-                    )
-                    Text(
-                        text = "Controls how the planning model decides when to use tools vs respond directly. Must output valid JSON.",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
-                    )
-                    
-                    OutlinedTextField(
-                        value = plannerSystemPrompt,
-                        onValueChange = { 
-                            plannerSystemPrompt = it
-                            systemPromptManager.plannerSystemPrompt = it
-                        },
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .height(200.dp),
-                        placeholder = { Text("Enter planner system prompt...") },
-                        maxLines = 10
-                    )
-                }
-            }
-
-            // Tool Awareness Prompt
-            Card(
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                Column(
-                    modifier = Modifier.padding(16.dp),
-                    verticalArrangement = Arrangement.spacedBy(12.dp)
-                ) {
-                    Text(
-                        text = "Tool Awareness Module",
-                        style = MaterialTheme.typography.titleMedium
-                    )
-                    Text(
-                        text = "Teaches the AI how to handle and discuss tool results (TOOL_RESULT blocks).",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
-                    )
-                    
-                    OutlinedTextField(
-                        value = toolAwarenessPrompt,
-                        onValueChange = { 
-                            toolAwarenessPrompt = it
-                            systemPromptManager.toolAwarenessPrompt = it
-                        },
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .height(150.dp),
-                        placeholder = { Text("Enter tool awareness prompt...") },
-                        maxLines = 8
-                    )
-                }
-            }
-            
             // Export/Import section
             Card(
                 modifier = Modifier.fillMaxWidth()
             ) {
                 Column(
                     modifier = Modifier.padding(16.dp),
-                    verticalArrangement = Arrangement.spacedBy(12.dp)
+                       verticalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
                     Text(
                         text = "Backup & Restore",
-                        style = MaterialTheme.typography.titleMedium
+                         style = MaterialTheme.typography.titleMedium
                     )
-                    
+
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.spacedBy(8.dp)
@@ -193,7 +122,7 @@ fun SystemPromptsScreen(
                         ) {
                             Text("Export")
                         }
-                        
+
                         OutlinedButton(
                             onClick = {
                                 // TODO: Import from file or clipboard
@@ -207,31 +136,29 @@ fun SystemPromptsScreen(
             }
         }
     }
-    
+
     // Reset confirmation dialog
     if (showResetDialog) {
         AlertDialog(
             onDismissRequest = { showResetDialog = false },
             title = { Text("Reset to Defaults") },
-            text = { Text("This will reset all system prompts to their default values. Your custom prompts will be lost.") },
-            confirmButton = {
-                TextButton(
-                    onClick = {
-                        systemPromptManager.resetToDefaults()
-                        corePersonalityPrompt = systemPromptManager.corePersonalityPrompt
-                        plannerSystemPrompt = systemPromptManager.plannerSystemPrompt
-                        toolAwarenessPrompt = systemPromptManager.toolAwarenessPrompt
-                        showResetDialog = false
+                    text = { Text("This will reset the core system prompt to its default value. Your custom prompt will be lost.") },
+                    confirmButton = {
+                        TextButton(
+                            onClick = {
+                                systemPromptManager.resetToDefaults()
+                                corePersonalityPrompt = systemPromptManager.corePersonalityPrompt
+                                showResetDialog = false
+                            }
+                        ) {
+                            Text("Reset")
+                        }
+                    },
+                    dismissButton = {
+                        TextButton(onClick = { showResetDialog = false }) {
+                            Text("Cancel")
+                        }
                     }
-                ) {
-                    Text("Reset")
-                }
-            },
-            dismissButton = {
-                TextButton(onClick = { showResetDialog = false }) {
-                    Text("Cancel")
-                }
-            }
         )
     }
 }

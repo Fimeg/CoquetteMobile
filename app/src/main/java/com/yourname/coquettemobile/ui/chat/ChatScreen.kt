@@ -1,19 +1,10 @@
 package com.yourname.coquettemobile.ui.chat
 
+import androidx.compose.animation.core.*
+import androidx.compose.animation.animateContentSize
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
@@ -22,79 +13,66 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Clear
-import androidx.compose.material.icons.filled.KeyboardArrowDown  
-import androidx.compose.material.icons.filled.KeyboardArrowUp
-import androidx.compose.material.icons.filled.Send
-import androidx.compose.animation.core.*
-import androidx.compose.ui.draw.rotate
-import androidx.compose.ui.draw.alpha
-import androidx.compose.ui.unit.sp
-import androidx.compose.material.icons.filled.Settings
-import androidx.compose.material.icons.filled.Menu
-import androidx.compose.material.icons.filled.Add
-import androidx.compose.material3.Card
-import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.DropdownMenu
-import androidx.compose.material3.DropdownMenuItem
-import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.Scaffold
-import androidx.compose.material3.Surface
-import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
-import androidx.compose.material3.TopAppBar
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
+import androidx.compose.material.icons.filled.*
+import androidx.compose.material3.*
+import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.draw.rotate
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.text.font.FontStyle
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import androidx.lifecycle.viewmodel.compose.viewModel
+import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import coil.compose.SubcomposeAsyncImage
 import com.yourname.coquettemobile.core.models.ChatMessage
 import com.yourname.coquettemobile.core.models.MessageType
-import com.yourname.coquettemobile.core.database.entities.Personality
+import com.yourname.coquettemobile.core.models.AiMessageState
+import com.yourname.coquettemobile.ui.components.RichText
+import com.yourname.coquettemobile.ui.components.StreamingRichText
+import com.yourname.coquettemobile.ui.components.StreamingToolExecution
+import com.yourname.coquettemobile.ui.components.StreamingImageDisplay
+import com.yourname.coquettemobile.ui.components.StreamingThinkingIndicator
+import com.yourname.coquettemobile.ui.components.CenteredThinkingIndicator
+import com.yourname.coquettemobile.ui.components.ToolOutputDropdown
+import com.yourname.coquettemobile.ui.components.ThinkingDropdown
+import dagger.hilt.android.EntryPointAccessors
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ChatScreen(
     onSettingsClick: () -> Unit,
-    onHistoryClick: () -> Unit = {},
-    conversationId: String? = null,
-    viewModel: ChatViewModel = hiltViewModel()
+               onHistoryClick: () -> Unit = {},
+               onModuleManagementClick: () -> Unit = {},
+               conversationId: String? = null,
+               viewModel: ChatViewModel = hiltViewModel()
 ) {
-    val context = androidx.compose.ui.platform.LocalContext.current
+    val context = LocalContext.current
     val appPreferences = remember {
-        dagger.hilt.android.EntryPointAccessors.fromApplication(
+        EntryPointAccessors.fromApplication(
             context.applicationContext,
             com.yourname.coquettemobile.di.AppModule.AppPreferencesEntryPoint::class.java
         ).appPreferences()
     }
     val chatMessages by viewModel.chatMessages.collectAsStateWithLifecycle()
     val isLoading by viewModel.isLoading.collectAsStateWithLifecycle()
-    val processingState by viewModel.processingState.collectAsStateWithLifecycle()
+    // Removed processingState - now using stateful ChatMessage lifecycle
     val selectedPersonality by viewModel.selectedPersonality.collectAsStateWithLifecycle()
     val availablePersonalities by viewModel.availablePersonalities.collectAsStateWithLifecycle()
     val availableModels by viewModel.availableModels.collectAsStateWithLifecycle()
     val selectedModel by viewModel.selectedModel.collectAsStateWithLifecycle()
-    val connectionStatus by viewModel.connectionStatus.collectAsStateWithLifecycle()
-    
+    val activeModules by viewModel.activeModules.collectAsStateWithLifecycle()
+
     var messageText by remember { mutableStateOf("") }
     var showPersonalityMenu by remember { mutableStateOf(false) }
-    var showModelMenu by remember { mutableStateOf(false) }
     var showMenu by remember { mutableStateOf(false) }
     val focusManager = LocalFocusManager.current
     val lazyListState = rememberLazyListState()
@@ -104,7 +82,7 @@ fun ChatScreen(
             lazyListState.animateScrollToItem(chatMessages.size - 1)
         }
     }
-    
+
     // Handle conversation switching
     LaunchedEffect(conversationId) {
         if (conversationId != null) {
@@ -120,41 +98,7 @@ fun ChatScreen(
                     Box(
                         modifier = Modifier.fillMaxWidth(),
                         contentAlignment = Alignment.Center
-                    ) {
-                        Box {
-                            TextButton(
-                                onClick = { showModelMenu = true },
-                                modifier = Modifier.widthIn(min = 120.dp, max = 200.dp)
-                            ) {
-                                Text(
-                                    text = if (selectedModel == "auto") "🤖 Auto Route" else selectedModel,
-                                    style = MaterialTheme.typography.titleMedium,
-                                    maxLines = 1,
-                                    overflow = TextOverflow.Ellipsis
-                                )
-                            }
-                            DropdownMenu(
-                                expanded = showModelMenu,
-                                onDismissRequest = { showModelMenu = false }
-                            ) {
-                                availableModels.forEach { model ->
-                                    DropdownMenuItem(
-                                        text = {
-                                            Text(
-                                                text = if (model == "auto") "🤖 Auto Route" else model,
-                                                maxLines = 1,
-                                                overflow = TextOverflow.Ellipsis
-                                            )
-                                        },
-                                        onClick = {
-                                            viewModel.updateSelectedModel(model)
-                                            showModelMenu = false
-                                        }
-                                    )
-                                }
-                            }
-                        }
-                    }
+                    ) {}
                 },
                 navigationIcon = {
                     // Hamburger menu
@@ -167,62 +111,79 @@ fun ChatScreen(
                             onDismissRequest = { showMenu = false }
                         ) {
                             DropdownMenuItem(
-                                text = { Text("🆕 New Chat") },
-                                onClick = {
-                                    viewModel.clearChat()
-                                    showMenu = false
-                                }
+                                text = { Text(" New Chat") },
+                                             onClick = {
+                                                 viewModel.clearChat()
+                                                 showMenu = false
+                                             }
                             )
                             DropdownMenuItem(
-                                text = { Text("📜 History") },
-                                onClick = {
-                                    onHistoryClick()
-                                    showMenu = false
-                                }
+                                text = { Text(" History") },
+                                             onClick = {
+                                                 onHistoryClick()
+                                                 showMenu = false
+                                             }
                             )
                             DropdownMenuItem(
                                 text = { Text("⚙️ Settings") },
-                                onClick = {
-                                    onSettingsClick()
-                                    showMenu = false
-                                }
+                                             onClick = {
+                                                 onSettingsClick()
+                                                 showMenu = false
+                                             }
                             )
                         }
                     }
                 },
                 actions = {
-                    // Personality selector on right
-                    Box {
-                        IconButton(
-                            onClick = { showPersonalityMenu = true }
-                        ) {
-                            Text(
-                                text = selectedPersonality?.emoji ?: "🤖",
-                                style = MaterialTheme.typography.titleLarge
-                            )
-                        }
-                        DropdownMenu(
-                            expanded = showPersonalityMenu,
-                            onDismissRequest = { showPersonalityMenu = false }
-                        ) {
-                            availablePersonalities.forEach { personality ->
-                                DropdownMenuItem(
-                                    text = {
-                                        Row(
-                                            verticalAlignment = Alignment.CenterVertically
-                                        ) {
-                                            Text(
-                                                text = personality.emoji,
-                                                modifier = Modifier.padding(end = 8.dp)
-                                            )
-                                            Text(text = personality.name)
-                                        }
-                                    },
-                                    onClick = {
-                                        viewModel.updatePersonality(personality)
-                                        showPersonalityMenu = false
-                                    }
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        activeModules.forEach { moduleName ->
+                            Card(
+                                modifier = Modifier.padding(horizontal = 4.dp),
+                                 shape = RoundedCornerShape(8.dp)
+                            ) {
+                                Text(
+                                    text = moduleName,
+                                     style = MaterialTheme.typography.labelSmall,
+                                     modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
                                 )
+                            }
+                        }
+                        IconButton(onClick = onModuleManagementClick) {
+                            Icon(Icons.Default.Add, contentDescription = "Module Management")
+                        }
+                        // Personality selector on right
+                        Box {
+                            IconButton(
+                                onClick = { showPersonalityMenu = true }
+                            ) {
+                                Text(
+                                    text = selectedPersonality?.emoji ?: "",
+                                     style = MaterialTheme.typography.titleLarge
+                                )
+                            }
+                            DropdownMenu(
+                                expanded = showPersonalityMenu,
+                                onDismissRequest = { showPersonalityMenu = false }
+                            ) {
+                                availablePersonalities.forEach { personality ->
+                                    DropdownMenuItem(
+                                        text = {
+                                            Row(
+                                                verticalAlignment = Alignment.CenterVertically
+                                            ) {
+                                                Text(
+                                                    text = personality.emoji,
+                                                     modifier = Modifier.padding(end = 8.dp)
+                                                )
+                                                Text(text = personality.name)
+                                            }
+                                        },
+                                        onClick = {
+                                            viewModel.updatePersonality(personality)
+                                            showPersonalityMenu = false
+                                        }
+                                    )
+                                }
                             }
                         }
                     }
@@ -232,33 +193,33 @@ fun ChatScreen(
     ) { innerPadding ->
         Column(
             modifier = Modifier
-                .fillMaxSize()
-                .padding(innerPadding)
+            .fillMaxSize()
+            .padding(innerPadding)
         ) {
             // Chat messages
             LazyColumn(
                 modifier = Modifier
-                    .weight(1f)
-                    .fillMaxWidth()
-                    .padding(horizontal = 16.dp),
-                state = lazyListState,
-                verticalArrangement = Arrangement.spacedBy(8.dp)
+                .weight(1f)
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp),
+                       state = lazyListState,
+                       verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {
                 items(chatMessages) { message ->
-                    ChatMessageBubble(
-                        message = message,
-                        showModelUsed = appPreferences.showModelUsed
-                    )
-                }
-                
-                // Processing state indicator
-                if (isLoading) {
-                    item {
-                        ProcessingIndicator(
-                            state = processingState,
-                            personalityName = selectedPersonality?.name ?: "Scout",
-                            modifier = Modifier.padding(vertical = 8.dp)
+                    when (message.type) {
+                        MessageType.USER -> UserMessageBubble(message = message)
+                        MessageType.AI -> StatefulChatMessageBubble(
+                            message = message,
+                            showModelUsed = appPreferences.showModelUsed
                         )
+                        MessageType.ERROR, MessageType.SYSTEM -> ChatMessageBubble(
+                            message = message,
+                            showModelUsed = appPreferences.showModelUsed
+                        )
+                        // Legacy message types are now handled within StatefulChatMessageBubble
+                        MessageType.THINKING, MessageType.TOOL_STATUS, MessageType.IMAGE -> {
+                            // These are now integrated into the AI message lifecycle
+                        }
                     }
                 }
             }
@@ -266,34 +227,34 @@ fun ChatScreen(
             // Input area
             Row(
                 modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(16.dp),
+                .fillMaxWidth()
+                .padding(16.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 OutlinedTextField(
                     value = messageText,
                     onValueChange = { messageText = it },
                     modifier = Modifier.weight(1f),
-                    placeholder = { Text("Type your message...") },
-                    keyboardOptions = KeyboardOptions(imeAction = ImeAction.Send),
-                    keyboardActions = KeyboardActions(
-                        onSend = {
-                            if (messageText.isNotBlank()) {
-                                viewModel.sendMessage(messageText)
-                                messageText = ""
-                                focusManager.clearFocus()
-                            }
-                        }
-                    ),
-                    trailingIcon = {
-                        if (messageText.isNotBlank()) {
-                            IconButton(
-                                onClick = { messageText = "" }
-                            ) {
-                                Icon(Icons.Default.Clear, contentDescription = "Clear")
-                            }
-                        }
-                    }
+                                  placeholder = { Text("Type your message...") },
+                                  keyboardOptions = KeyboardOptions(imeAction = ImeAction.Send),
+                                  keyboardActions = KeyboardActions(
+                                      onSend = {
+                                          if (messageText.isNotBlank()) {
+                                              viewModel.sendMessage(messageText)
+                                              messageText = ""
+                                              focusManager.clearFocus()
+                                          }
+                                      }
+                                  ),
+                                  trailingIcon = {
+                                      if (messageText.isNotBlank()) {
+                                          IconButton(
+                                              onClick = { messageText = "" }
+                                          ) {
+                                              Icon(Icons.Default.Clear, contentDescription = "Clear")
+                                          }
+                                      }
+                                  }
                 )
 
                 Spacer(modifier = Modifier.width(8.dp))
@@ -307,22 +268,192 @@ fun ChatScreen(
                         }
                     },
                     enabled = messageText.isNotBlank() && !isLoading,
-                    modifier = Modifier
-                        .size(48.dp)
-                        .clip(CircleShape)
-                        .background(MaterialTheme.colorScheme.primary)
+                           modifier = Modifier
+                           .size(48.dp)
+                           .clip(CircleShape)
+                           .background(MaterialTheme.colorScheme.primary)
                 ) {
                     if (isLoading) {
                         CircularProgressIndicator(
                             modifier = Modifier.size(24.dp),
-                            color = MaterialTheme.colorScheme.onPrimary,
-                            strokeWidth = 2.dp
+                                                  color = MaterialTheme.colorScheme.onPrimary,
+                                                  strokeWidth = 2.dp
                         )
                     } else {
                         Icon(
                             Icons.Default.Send,
-                            contentDescription = "Send",
-                            tint = MaterialTheme.colorScheme.onPrimary
+                             contentDescription = "Send",
+                             tint = MaterialTheme.colorScheme.onPrimary
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+fun StatefulChatMessageBubble(
+    message: ChatMessage,
+    showModelUsed: Boolean = true
+) {
+    val backgroundColor = MaterialTheme.colorScheme.surfaceVariant
+    val textColor = MaterialTheme.colorScheme.onSurfaceVariant
+
+    Box(
+        modifier = Modifier.fillMaxWidth(),
+        contentAlignment = Alignment.CenterStart
+    ) {
+        Card(
+            modifier = Modifier.widthIn(max = 380.dp),
+            shape = RoundedCornerShape(topStart = 4.dp, topEnd = 16.dp, bottomStart = 16.dp, bottomEnd = 16.dp)
+        ) {
+            Surface(
+                color = backgroundColor,
+                contentColor = textColor
+            ) {
+                Column(
+                    modifier = Modifier
+                        .padding(12.dp)
+                        .animateContentSize() // Animates as new sections appear
+                ) {
+                    // --- Chronological Section 1: Thought Process ---
+                    // This appears instantly when the bubble is created.
+                    if (message.messageState == AiMessageState.THINKING || message.thinkingContent != null) {
+                        var isThinkingExpanded by remember { mutableStateOf(false) } // Start collapsed
+                        if (message.thinkingContent != null) {
+                            ThinkingDropdown(
+                                personalityName = "Ani",
+                                thinkingContent = message.thinkingContent,
+                                isExpanded = isThinkingExpanded,
+                                onToggle = { isThinkingExpanded = !isThinkingExpanded }
+                            )
+                        } else {
+                            // Show compact thinking indicator while waiting for content
+                            Card(
+                                modifier = Modifier.fillMaxWidth(),
+                                colors = CardDefaults.cardColors(
+                                    containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
+                                )
+                            ) {
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(12.dp),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                ) {
+                                    CircularProgressIndicator(
+                                        modifier = Modifier.size(16.dp),
+                                        strokeWidth = 2.dp,
+                                        color = MaterialTheme.colorScheme.primary
+                                    )
+                                    Text(
+                                        text = "💭 Ani is thinking...",
+                                        style = MaterialTheme.typography.bodyMedium.copy(
+                                            fontStyle = FontStyle.Italic
+                                        ),
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.8f)
+                                    )
+                                }
+                            }
+                        }
+                    }
+
+                    // --- Chronological Section 2: Tool Execution ---
+                    // This section appears once the state is EXECUTING_TOOL or COMPLETE.
+                    if (message.messageState == AiMessageState.EXECUTING_TOOL || message.messageState == AiMessageState.COMPLETE) {
+                        if (message.toolExecutions.isNotEmpty()) {
+                            Spacer(modifier = Modifier.height(8.dp))
+                            var isToolsExpanded by remember { mutableStateOf(true) }
+                            ToolOutputDropdown(
+                                toolExecutions = message.toolExecutions,
+                                isExpanded = isToolsExpanded,
+                                onToggle = { isToolsExpanded = !isToolsExpanded }
+                            )
+                        }
+                    }
+
+                    // --- Chronological Section 3: Final Conversational Response ---
+                    // This section appears last and streams in.
+                    if (message.messageState == AiMessageState.COMPLETE) {
+                        if (message.content.isNotBlank()) {
+                            Spacer(modifier = Modifier.height(12.dp))
+                            Divider() // A nice visual separator
+                            Spacer(modifier = Modifier.height(12.dp))
+
+                            androidx.compose.foundation.text.selection.SelectionContainer {
+                                StreamingRichText(
+                                    content = message.content.take(50000), // Limit to prevent crashes
+                                    color = textColor
+                                )
+                            }
+                        }
+                    } else if (message.messageState == AiMessageState.EXECUTING_TOOL) {
+                        // Show a thinking indicator while waiting for the final response
+                        Spacer(modifier = Modifier.height(8.dp))
+                        CenteredThinkingIndicator(personalityName = "Ani")
+                    }
+
+                    // --- Footer with Model Info ---
+                    if (message.modelUsed != null && showModelUsed) {
+                        Spacer(modifier = Modifier.height(8.dp))
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(
+                                text = "via ${message.modelUsed}",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = textColor.copy(alpha = 0.7f)
+                            )
+                            if (message.processingTime != null) {
+                                Text(
+                                    text = "${message.processingTime}ms",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = textColor.copy(alpha = 0.5f)
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+fun UserMessageBubble(message: ChatMessage) {
+    val backgroundColor = MaterialTheme.colorScheme.primaryContainer
+    val textColor = MaterialTheme.colorScheme.onPrimaryContainer
+
+    Box(
+        modifier = Modifier.fillMaxWidth(),
+        contentAlignment = Alignment.CenterEnd
+    ) {
+        Card(
+            modifier = Modifier
+                .widthIn(max = 380.dp)
+                .padding(horizontal = 4.dp),
+            shape = RoundedCornerShape(
+                topStart = 16.dp,
+                topEnd = 4.dp,
+                bottomStart = 16.dp,
+                bottomEnd = 16.dp
+            )
+        ) {
+            Surface(
+                color = backgroundColor,
+                contentColor = textColor
+            ) {
+                Column(
+                    modifier = Modifier.padding(12.dp)
+                ) {
+                    androidx.compose.foundation.text.selection.SelectionContainer {
+                        StreamingRichText(
+                            content = message.content,
+                            color = textColor
                         )
                     }
                 }
@@ -342,16 +473,18 @@ fun ChatMessageBubble(
         MessageType.AI -> MaterialTheme.colorScheme.surfaceVariant
         MessageType.ERROR -> MaterialTheme.colorScheme.errorContainer
         MessageType.SYSTEM -> MaterialTheme.colorScheme.surface
+        else -> MaterialTheme.colorScheme.surface
     }
-    
+
     val textColor = when (message.type) {
         MessageType.USER -> MaterialTheme.colorScheme.onPrimaryContainer
         MessageType.AI -> MaterialTheme.colorScheme.onSurfaceVariant
         MessageType.ERROR -> MaterialTheme.colorScheme.onErrorContainer
         MessageType.SYSTEM -> MaterialTheme.colorScheme.onSurface
+        else -> MaterialTheme.colorScheme.onSurface
     }
-    
-    var isThinkingExpanded by remember { mutableStateOf(false) }
+
+    // UltraThink: Simplified UI - no complex state management needed
 
     Box(
         modifier = Modifier.fillMaxWidth(),
@@ -359,7 +492,7 @@ fun ChatMessageBubble(
     ) {
         Card(
             modifier = Modifier
-                .widthIn(max = 280.dp)
+                .widthIn(max = 380.dp) // Increased width for better tool display
                 .padding(horizontal = 4.dp),
             shape = RoundedCornerShape(
                 topStart = if (isUserMessage) 16.dp else 4.dp,
@@ -375,77 +508,51 @@ fun ChatMessageBubble(
                 Column(
                     modifier = Modifier.padding(12.dp)
                 ) {
-                    // Thinking section (if available)
-                    if (!message.thinkingContent.isNullOrBlank() && message.type == MessageType.AI) {
+                    // UltraThink: Unified streaming content with simplified UI
+                    androidx.compose.foundation.text.selection.SelectionContainer {
+                        StreamingRichText(
+                            content = message.content,
+                            color = textColor,
+                            showThinking = message.thinkingContent != null,
+                            thinkingContent = message.thinkingContent,
+                            isStreaming = false, // Not streaming for saved messages
+                            modifier = Modifier.fillMaxWidth()
+                        )
+                    }
+                    
+                    // Tool executions - UltraThink dropdown
+                    if (message.toolExecutions.isNotEmpty()) {
+                        var toolsExpanded by remember { mutableStateOf(false) }
+                        Spacer(modifier = Modifier.height(8.dp))
+                        ToolOutputDropdown(
+                            toolExecutions = message.toolExecutions,
+                            isExpanded = toolsExpanded,
+                            onToggle = { toolsExpanded = !toolsExpanded },
+                            modifier = Modifier.fillMaxWidth()
+                        )
+                    }
+
+                    // Model info with enhanced styling
+                    if (message.modelUsed != null && message.type == MessageType.AI && showModelUsed) {
+                        Spacer(modifier = Modifier.height(8.dp))
                         Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .clickable { isThinkingExpanded = !isThinkingExpanded }
-                                .padding(vertical = 4.dp),
+                            modifier = Modifier.fillMaxWidth(),
                             horizontalArrangement = Arrangement.SpaceBetween,
                             verticalAlignment = Alignment.CenterVertically
                         ) {
-                            Column(modifier = Modifier.weight(1f)) {
-                                Text(
-                                    text = "🤔 Thinking process",
-                                    style = MaterialTheme.typography.labelMedium,
-                                    color = textColor.copy(alpha = 0.8f)
-                                )
-                                // Show preview when collapsed
-                                if (!isThinkingExpanded && message.thinkingContent.length > 50) {
-                                    Text(
-                                        text = message.thinkingContent.take(50) + "...",
-                                        style = MaterialTheme.typography.bodySmall,
-                                        color = textColor.copy(alpha = 0.6f),
-                                        maxLines = 1,
-                                        modifier = Modifier.padding(top = 2.dp)
-                                    )
-                                }
-                            }
-                            Icon(
-                                imageVector = if (isThinkingExpanded) Icons.Default.KeyboardArrowUp else Icons.Default.KeyboardArrowDown,
-                                contentDescription = if (isThinkingExpanded) "Collapse" else "Expand",
-                                modifier = Modifier.size(16.dp),
-                                tint = textColor.copy(alpha = 0.6f)
+                            Text(
+                                text = "via ${message.modelUsed}",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = textColor.copy(alpha = 0.7f)
                             )
-                        }
-                        
-                        if (isThinkingExpanded) {
-                            Card(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .padding(vertical = 4.dp),
-                                shape = RoundedCornerShape(8.dp)
-                            ) {
-                                Surface(
-                                    color = backgroundColor.copy(alpha = 0.5f),
-                                    contentColor = textColor.copy(alpha = 0.9f)
-                                ) {
-                                    Text(
-                                        text = message.thinkingContent,
-                                        style = MaterialTheme.typography.bodySmall,
-                                        modifier = Modifier.padding(8.dp)
-                                    )
-                                }
+                            if (message.processingTime != null) {
+                                Text(
+                                    text = "${message.processingTime}ms",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = textColor.copy(alpha = 0.5f)
+                                )
                             }
                         }
-                        
-                        Spacer(modifier = Modifier.height(8.dp))
-                    }
-                    
-                    // Main message content
-                    Text(
-                        text = message.content,
-                        style = MaterialTheme.typography.bodyMedium
-                    )
-                    
-                    if (message.modelUsed != null && message.type == MessageType.AI && showModelUsed) {
-                        Spacer(modifier = Modifier.height(4.dp))
-                        Text(
-                            text = "via ${message.modelUsed}",
-                            style = MaterialTheme.typography.labelSmall,
-                            color = textColor.copy(alpha = 0.7f)
-                        )
                     }
                 }
             }
@@ -454,101 +561,132 @@ fun ChatMessageBubble(
 }
 
 @Composable
-fun ProcessingIndicator(
-    state: ChatViewModel.ProcessingState,
-    personalityName: String = "Scout",
-    modifier: Modifier = Modifier
-) {
-    val infiniteTransition = rememberInfiniteTransition(label = "processing")
-    val rotation by infiniteTransition.animateFloat(
-        initialValue = 0f,
-        targetValue = 360f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(2000, easing = LinearEasing),
-            repeatMode = RepeatMode.Restart
-        ),
-        label = "rotation"
-    )
-    
-    val alpha by infiniteTransition.animateFloat(
-        initialValue = 0.3f,
-        targetValue = 1f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(1000, easing = FastOutSlowInEasing),
-            repeatMode = RepeatMode.Reverse
-        ),
-        label = "alpha"
-    )
-    
+fun ThinkingBubble(message: ChatMessage) {
+    var isThinkingExpanded by remember { mutableStateOf(true) } // Default to expanded for real-time streaming
+    val textColor = MaterialTheme.colorScheme.onSurfaceVariant
+
     Box(
-        modifier = modifier.fillMaxWidth(),
+        modifier = Modifier.fillMaxWidth(),
         contentAlignment = Alignment.CenterStart
     ) {
         Card(
             modifier = Modifier
-                .widthIn(max = 200.dp)
+                .widthIn(max = 380.dp)
                 .padding(horizontal = 4.dp),
             shape = RoundedCornerShape(
                 topStart = 4.dp,
                 topEnd = 16.dp,
                 bottomStart = 16.dp,
                 bottomEnd = 16.dp
+            ),
+            elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+        ) {
+            StreamingThinkingIndicator(
+                personalityName = "AI",
+                thinkingContent = message.content,
+                isExpanded = isThinkingExpanded,
+                onToggle = { isThinkingExpanded = !isThinkingExpanded },
+                modifier = Modifier.padding(12.dp)
+            )
+        }
+    }
+}
+
+@Composable
+fun ToolStatusBubble(message: ChatMessage) {
+    val icon = when {
+        message.content.startsWith("Running") -> "🛠️"
+        message.content.startsWith("✓") -> "✅"
+        else -> "⚠️"
+    }
+    val infiniteTransition = rememberInfiniteTransition(label = "tool_status")
+    val alpha by infiniteTransition.animateFloat(
+        initialValue = if (message.content.startsWith("Running")) 0.5f else 1f,
+        targetValue = 1f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(1000, easing = FastOutSlowInEasing),
+            repeatMode = if (message.content.startsWith("Running")) RepeatMode.Reverse else RepeatMode.Restart
+        ),
+        label = "tool_alpha"
+    )
+
+    Box(
+        modifier = Modifier.fillMaxWidth(),
+        contentAlignment = Alignment.Center
+    ) {
+        Card(
+            modifier = Modifier
+                .padding(vertical = 4.dp)
+                .alpha(if (message.content.startsWith("Running")) alpha else 1f),
+            shape = RoundedCornerShape(8.dp),
+            colors = CardDefaults.cardColors(
+                containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.5f)
             )
         ) {
-            Surface(
-                color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.7f),
-                contentColor = MaterialTheme.colorScheme.onSurfaceVariant
+            Row(
+                modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
+                verticalAlignment = Alignment.CenterVertically
             ) {
-                Row(
-                    modifier = Modifier.padding(12.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    when (state) {
-                        is ChatViewModel.ProcessingState.Scout -> {
-                            Text(
-                                text = "🔍",
-                                modifier = Modifier
-                                    .rotate(rotation)
-                                    .alpha(alpha),
-                                fontSize = 16.sp
-                            )
-                            Text(
-                                text = "$personalityName is exploring...",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = alpha)
-                            )
-                        }
-                        is ChatViewModel.ProcessingState.Tools -> {
-                            Text(
-                                text = "🛠️",
-                                modifier = Modifier.alpha(alpha),
-                                fontSize = 16.sp
-                            )
-                            Text(
-                                text = "Running ${state.toolName}...",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = alpha)
-                            )
-                        }
-                        is ChatViewModel.ProcessingState.Thinking -> {
-                            CircularProgressIndicator(
-                                modifier = Modifier.size(16.dp),
-                                color = MaterialTheme.colorScheme.primary,
-                                strokeWidth = 2.dp
-                            )
-                            Text(
-                                text = "Thinking...",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = alpha)
-                            )
-                        }
-                        is ChatViewModel.ProcessingState.Idle -> {
-                            // No indicator when idle
-                        }
+                Text(text = icon, fontSize = 14.sp)
+                Spacer(modifier = Modifier.width(8.dp))
+                Text(
+                    text = message.content,
+                    style = MaterialTheme.typography.bodySmall.copy(fontStyle = FontStyle.Italic),
+                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.8f)
+                )
+            }
+        }
+    }
+}
+
+@Composable
+fun ImageBubble(message: ChatMessage) {
+    Box(
+        modifier = Modifier.fillMaxWidth(),
+        contentAlignment = Alignment.CenterStart
+    ) {
+        Card(
+            modifier = Modifier
+                .widthIn(max = 300.dp)
+                .padding(vertical = 4.dp),
+            shape = RoundedCornerShape(16.dp),
+            elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+        ) {
+            SubcomposeAsyncImage(
+                model = message.content,
+                contentDescription = "Image from AI: ${message.content}",
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .heightIn(max = 350.dp)
+                    .clip(RoundedCornerShape(16.dp)),
+                contentScale = ContentScale.Crop,
+                loading = {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(200.dp)
+                            .background(MaterialTheme.colorScheme.surfaceVariant),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        CircularProgressIndicator()
+                    }
+                },
+                error = {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(200.dp)
+                            .background(MaterialTheme.colorScheme.errorContainer),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Warning,
+                            contentDescription = "Error loading image",
+                            tint = MaterialTheme.colorScheme.onErrorContainer
+                        )
                     }
                 }
-            }
+            )
         }
     }
 }

@@ -16,33 +16,44 @@ class AppPreferences @Inject constructor(
     )
     
     var isStreamingEnabled: Boolean
-        get() = preferences.getBoolean(KEY_STREAMING_ENABLED, false)
+        get() = preferences.getBoolean(KEY_STREAMING_ENABLED, true) // UltraThink: Always streaming by default
         set(value) = preferences.edit().putBoolean(KEY_STREAMING_ENABLED, value).apply()
     
-    var enableSubconsciousReasoning: Boolean
-        get() = preferences.getBoolean(KEY_SUBCONSCIOUS_REASONING, true)
-        set(value) = preferences.edit().putBoolean(KEY_SUBCONSCIOUS_REASONING, value).apply()
-    
-    var enableModelRouting: Boolean
-        get() = preferences.getBoolean(KEY_MODEL_ROUTING, true)
-        set(value) = preferences.edit().putBoolean(KEY_MODEL_ROUTING, value).apply()
+    // Split-brain architecture preferences removed - using Unity architecture only
     
     var showModelUsed: Boolean
         get() = preferences.getBoolean(KEY_SHOW_MODEL_USED, true)
         set(value) = preferences.edit().putBoolean(KEY_SHOW_MODEL_USED, value).apply()
+
+    var errorRecoveryModel: String
+        get() = preferences.getString(KEY_ERROR_RECOVERY_MODEL, "hf.co/janhq/Jan-v1-4B-GGUF:Q8_0") ?: "hf.co/janhq/Jan-v1-4B-GGUF:Q8_0"
+        set(value) = preferences.edit().putString(KEY_ERROR_RECOVERY_MODEL, value).apply()
+
+    // Tool prompt customization
+    var unifiedReasoningPrompt: String?
+        get() = preferences.getString(KEY_UNIFIED_REASONING_PROMPT, null)
+        set(value) = preferences.edit().putString(KEY_UNIFIED_REASONING_PROMPT, value).apply()
+
+    var errorRecoveryPrompt: String?
+        get() = preferences.getString(KEY_ERROR_RECOVERY_PROMPT, null)
+        set(value) = preferences.edit().putString(KEY_ERROR_RECOVERY_PROMPT, value).apply()
+
+    var functionCallingPrompt: String?
+        get() = preferences.getString(KEY_FUNCTION_CALLING_PROMPT, null)
+        set(value) = preferences.edit().putString(KEY_FUNCTION_CALLING_PROMPT, value).apply()
+
+    var defaultToolAwarenessPrompt: String?
+        get() = preferences.getString(KEY_DEFAULT_TOOL_AWARENESS_PROMPT, null)
+        set(value) = preferences.edit().putString(KEY_DEFAULT_TOOL_AWARENESS_PROMPT, value).apply()
     
-    // Split-brain model selection
-    var plannerModel: String
-        get() = preferences.getString(KEY_PLANNER_MODEL, "gemma3n:e4b") ?: "gemma3n:e4b"
-        set(value) = preferences.edit().putString(KEY_PLANNER_MODEL, value).apply()
-    
-    var personalityModel: String
-        get() = preferences.getString(KEY_PERSONALITY_MODEL, "deepseek-r1:32b") ?: "deepseek-r1:32b"
-        set(value) = preferences.edit().putString(KEY_PERSONALITY_MODEL, value).apply()
-    
-    var enableSplitBrain: Boolean
-        get() = preferences.getBoolean(KEY_ENABLE_SPLIT_BRAIN, true)
-        set(value) = preferences.edit().putBoolean(KEY_ENABLE_SPLIT_BRAIN, value).apply()
+    // System date prompt
+    var includeSystemDate: Boolean
+        get() = preferences.getBoolean(KEY_INCLUDE_SYSTEM_DATE, true)
+        set(value) = preferences.edit().putBoolean(KEY_INCLUDE_SYSTEM_DATE, value).apply()
+        
+    var systemDatePrompt: String?
+        get() = preferences.getString(KEY_SYSTEM_DATE_PROMPT, null)
+        set(value) = preferences.edit().putString(KEY_SYSTEM_DATE_PROMPT, value).apply()
     
     // Ollama Server Configuration
     var ollamaServerUrl: String
@@ -61,19 +72,38 @@ class AppPreferences @Inject constructor(
     var toolOllamaModel: String
         get() = preferences.getString(KEY_TOOL_OLLAMA_MODEL, DEFAULT_TOOL_MODEL) ?: DEFAULT_TOOL_MODEL
         set(value) = preferences.edit().putString(KEY_TOOL_OLLAMA_MODEL, value).apply()
+
+    var developerContextLimit: Int?
+        get() {
+            val value = preferences.getInt(KEY_DEVELOPER_CONTEXT_LIMIT, -1)
+            return if (value == -1) null else value
+        }
+        set(value) {
+            if (value == null) {
+                preferences.edit().remove(KEY_DEVELOPER_CONTEXT_LIMIT).apply()
+            } else {
+                preferences.edit().putInt(KEY_DEVELOPER_CONTEXT_LIMIT, value).apply()
+            }
+        }
     
     companion object {
         private const val KEY_STREAMING_ENABLED = "streaming_enabled"
-        private const val KEY_SUBCONSCIOUS_REASONING = "subconscious_reasoning"
-        private const val KEY_MODEL_ROUTING = "model_routing"
+        // Legacy split-brain keys removed
         private const val KEY_SHOW_MODEL_USED = "show_model_used"
-        private const val KEY_PLANNER_MODEL = "planner_model"
-        private const val KEY_PERSONALITY_MODEL = "personality_model"
-        private const val KEY_ENABLE_SPLIT_BRAIN = "enable_split_brain"
+        private const val KEY_ERROR_RECOVERY_MODEL = "error_recovery_model"
         private const val KEY_OLLAMA_SERVER_URL = "ollama_server_url"
         private const val KEY_ENABLE_TOOL_OLLAMA = "enable_tool_ollama"
         private const val KEY_TOOL_OLLAMA_SERVER_URL = "tool_ollama_server_url"
         private const val KEY_TOOL_OLLAMA_MODEL = "tool_ollama_model"
+        
+        // Tool prompt customization keys
+        private const val KEY_UNIFIED_REASONING_PROMPT = "unified_reasoning_prompt"
+        private const val KEY_ERROR_RECOVERY_PROMPT = "error_recovery_prompt"
+        private const val KEY_FUNCTION_CALLING_PROMPT = "function_calling_prompt"
+        private const val KEY_DEFAULT_TOOL_AWARENESS_PROMPT = "default_tool_awareness_prompt"
+        private const val KEY_INCLUDE_SYSTEM_DATE = "include_system_date"
+        private const val KEY_SYSTEM_DATE_PROMPT = "system_date_prompt"
+        private const val KEY_DEVELOPER_CONTEXT_LIMIT = "developer_context_limit"
         
         private const val DEFAULT_OLLAMA_URL = "http://10.10.20.19:11434"
         private const val DEFAULT_TOOL_OLLAMA_URL = "http://10.10.20.120:11434"

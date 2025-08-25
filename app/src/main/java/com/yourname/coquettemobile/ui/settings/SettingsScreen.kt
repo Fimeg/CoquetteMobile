@@ -11,6 +11,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.Divider
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.Edit
@@ -51,6 +52,7 @@ fun SettingsScreen(
     onBackClick: () -> Unit,
     onManagePersonalitiesClick: () -> Unit = {},
     onSystemPromptsClick: () -> Unit = {},
+    onDeveloperClick: () -> Unit = {},
     viewModel: ChatViewModel = hiltViewModel()
 ) {
     val context = LocalContext.current
@@ -63,28 +65,19 @@ fun SettingsScreen(
     
     val selectedPersonality by viewModel.selectedPersonality.collectAsStateWithLifecycle()
     val enableStreaming by viewModel.isStreamingEnabled.collectAsStateWithLifecycle()
-    val availableModels by viewModel.availableModels.collectAsStateWithLifecycle()
-    val availablePlannerModels by viewModel.availablePlannerModels.collectAsStateWithLifecycle()
     
-    // Debug logging
-    android.util.Log.d("SettingsScreen", "Available planner models in UI: $availablePlannerModels")
-    
-    var enableSubconsciousReasoning by remember { mutableStateOf(appPreferences.enableSubconsciousReasoning) }
-    var enableModelRouting by remember { mutableStateOf(appPreferences.enableModelRouting) }
     var showModelUsed by remember { mutableStateOf(appPreferences.showModelUsed) }
-    var enableSplitBrain by remember { mutableStateOf(appPreferences.enableSplitBrain) }
-    var plannerModel by remember { mutableStateOf(appPreferences.plannerModel) }
-    var personalityModel by remember { mutableStateOf(appPreferences.personalityModel) }
     
-    var showPlannerDropdown by remember { mutableStateOf(false) }
-    var showPersonalityDropdown by remember { mutableStateOf(false) }
     
     var showServerDialog by remember { mutableStateOf(false) }
     var serverUrlInput by remember { mutableStateOf(appPreferences.ollamaServerUrl) }
     
-    var enableToolServer by remember { mutableStateOf(appPreferences.enableToolOllamaServer) }
-    var showToolServerDialog by remember { mutableStateOf(false) }
-    var toolServerUrlInput by remember { mutableStateOf(appPreferences.toolOllamaServerUrl) }
+    
+    // Unity architecture settings
+    var enableUnityMode by remember { mutableStateOf(selectedPersonality?.useUnifiedMode == true) }
+    var unifiedModel by remember { mutableStateOf(selectedPersonality?.unifiedModel ?: "hf.co/janhq/Jan-v1-4B-GGUF:Q8_0") }
+    var showUnityModelDropdown by remember { mutableStateOf(false) }
+    var contextWarningThreshold by remember { mutableStateOf(32768) }
 
     Scaffold(
         topBar = {
@@ -146,62 +139,6 @@ fun SettingsScreen(
                         )
                     }
                     
-                    // Tool Server Toggle
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.SpaceBetween
-                    ) {
-                        Column {
-                            Text(
-                                text = "Enable Tool Server",
-                                style = MaterialTheme.typography.bodyMedium
-                            )
-                            Text(
-                                text = "Use separate server for fast tool operations",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
-                            )
-                        }
-                        Switch(
-                            checked = enableToolServer,
-                            onCheckedChange = { 
-                                enableToolServer = it
-                                appPreferences.enableToolOllamaServer = it
-                                viewModel.loadAvailableModels() // Reload all models when toggled
-                            }
-                        )
-                    }
-                    
-                    // Tool Server URL (only show if enabled)
-                    if (enableToolServer) {
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .clickable { showToolServerDialog = true }
-                                .padding(vertical = 8.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.SpaceBetween
-                        ) {
-                            Column(modifier = Modifier.weight(1f)) {
-                                Text(
-                                    text = "Tool Server URL",
-                                    style = MaterialTheme.typography.bodyMedium
-                                )
-                                Text(
-                                    text = appPreferences.toolOllamaServerUrl,
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
-                                )
-                            }
-                            Icon(
-                                Icons.Default.Edit,
-                                contentDescription = "Edit tool server URL",
-                                tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
-                            )
-                        }
-                    }
-                    
                     Text(
                         text = "Available Models: Gemma 3, DeepSeek R1, Context7",
                         style = MaterialTheme.typography.bodyMedium
@@ -222,57 +159,6 @@ fun SettingsScreen(
                         style = MaterialTheme.typography.titleMedium
                     )
                     
-                    // Subconscious Reasoning
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.SpaceBetween
-                    ) {
-                        Column {
-                            Text(
-                                text = "Subconscious Reasoning",
-                                style = MaterialTheme.typography.bodyMedium
-                            )
-                            Text(
-                                text = "Deep analysis for complex queries",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
-                            )
-                        }
-                        Switch(
-                            checked = enableSubconsciousReasoning,
-                            onCheckedChange = { 
-                                enableSubconsciousReasoning = it
-                                appPreferences.enableSubconsciousReasoning = it
-                            }
-                        )
-                    }
-
-                    // Model Routing
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.SpaceBetween
-                    ) {
-                        Column {
-                            Text(
-                                text = "Intelligent Model Routing",
-                                style = MaterialTheme.typography.bodyMedium
-                            )
-                            Text(
-                                text = "Auto-select best model for each query",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
-                            )
-                        }
-                        Switch(
-                            checked = enableModelRouting,
-                            onCheckedChange = { 
-                                enableModelRouting = it
-                                appPreferences.enableModelRouting = it
-                            }
-                        )
-                    }
 
                     // Show Model Used
                     Row(
@@ -325,7 +211,7 @@ fun SettingsScreen(
                 }
             }
 
-            // Split-Brain Architecture
+            // Unity Architecture
             Card(
                 modifier = Modifier.fillMaxWidth()
             ) {
@@ -334,115 +220,143 @@ fun SettingsScreen(
                     verticalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
                     Text(
-                        text = "Split-Brain Architecture",
+                        text = "Unity Architecture",
                         style = MaterialTheme.typography.titleMedium
                     )
                     
-                    // Enable Split-Brain
+                    // Unity Architecture Info (always enabled)
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Column {
+                            Text(
+                                text = "Unity Architecture: Active",
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = MaterialTheme.colorScheme.primary
+                            )
+                            Text(
+                                text = "Single-brain reasoning with Jan models for optimal performance",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
+                            )
+                        }
+                    }
+
+                    // Unity Model Selection
+                    Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.SpaceBetween
+                        ) {
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(
+                                    text = "Unity Model",
+                                    style = MaterialTheme.typography.bodyMedium
+                                )
+                                Text(
+                                    text = "Single model handles reasoning + tools + personality",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
+                                )
+                            }
+                            Spacer(modifier = Modifier.width(8.dp))
+                            TextButton(
+                                onClick = { showUnityModelDropdown = true }
+                            ) {
+                                Text(unifiedModel.substringAfterLast("/").take(15) + if (unifiedModel.length > 15) "..." else "")
+                                DropdownMenu(
+                                    expanded = showUnityModelDropdown,
+                                    onDismissRequest = { showUnityModelDropdown = false }
+                                ) {
+                                    // Jan and other capable models
+                                    listOf(
+                                        "hf.co/janhq/Jan-v1-4B-GGUF:Q8_0",
+                                        "deepseek-r1:8b", 
+                                        "qwen3:8b",
+                                        "deepseek-r1:32b",
+                                        "qwen3:30b"
+                                    ).forEach { model ->
+                                        DropdownMenuItem(
+                                            text = { Text(model.substringAfterLast("/")) },
+                                            onClick = {
+                                                unifiedModel = model
+                                                showUnityModelDropdown = false
+                                                // TODO: Update personality's unifiedModel field
+                                            }
+                                        )
+                                    }
+                                }
+                            }
+                        }
+                        
+                        // Context Warning Threshold
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.SpaceBetween
+                        ) {
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(
+                                    text = "Context Warning Threshold",
+                                    style = MaterialTheme.typography.bodyMedium
+                                )
+                                Text(
+                                    text = "Warn when context exceeds ${contextWarningThreshold} tokens",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
+                                )
+                            }
+                            Spacer(modifier = Modifier.width(8.dp))
+                            TextButton(
+                                onClick = { /* TODO: Show context threshold dialog */ }
+                            ) {
+                                Text("${contextWarningThreshold}")
+                            }
+                        }
+                }
+            }
+
+            // Error Recovery Configuration
+            Card(
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Column(
+                    modifier = Modifier.padding(16.dp),
+                    verticalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    Text(
+                        text = "Error Recovery",
+                        style = MaterialTheme.typography.titleMedium
+                    )
+                    
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.SpaceBetween
                     ) {
-                        Column {
+                        Column(modifier = Modifier.weight(1f)) {
                             Text(
-                                text = "Enable Split-Brain Mode",
+                                text = "Error Recovery Model",
                                 style = MaterialTheme.typography.bodyMedium
                             )
                             Text(
-                                text = "Use separate models for planning and personality",
+                                text = "Model used for analyzing tool failures and generating recovery strategies",
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
                             )
                         }
-                        Switch(
-                            checked = enableSplitBrain,
-                            onCheckedChange = { 
-                                enableSplitBrain = it
-                                appPreferences.enableSplitBrain = it
-                            }
-                        )
-                    }
-
-                    if (enableSplitBrain) {
-                        // Planner Model Selection
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.SpaceBetween
+                        Spacer(modifier = Modifier.width(8.dp))
+                        TextButton(
+                            onClick = { /* TODO: Show error recovery model selector */ }
                         ) {
-                            Column(modifier = Modifier.weight(1f)) {
-                                Text(
-                                    text = "Planner Model",
-                                    style = MaterialTheme.typography.bodyMedium
-                                )
-                                Text(
-                                    text = "Small model for tool decisions (fast)",
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
-                                )
-                            }
-                            Spacer(modifier = Modifier.width(8.dp))
-                            TextButton(
-                                onClick = { showPlannerDropdown = true }
-                            ) {
-                                Text(plannerModel)
-                                DropdownMenu(
-                                    expanded = showPlannerDropdown,
-                                    onDismissRequest = { showPlannerDropdown = false }
-                                ) {
-                                    availablePlannerModels.forEach { model ->
-                                        DropdownMenuItem(
-                                            text = { Text(model) },
-                                            onClick = {
-                                                plannerModel = model
-                                                appPreferences.plannerModel = model
-                                                showPlannerDropdown = false
-                                            }
-                                        )
-                                    }
-                                }
-                            }
-                        }
-
-                        // Personality Model Selection
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.SpaceBetween
-                        ) {
-                            Column(modifier = Modifier.weight(1f)) {
-                                Text(
-                                    text = "Personality Model",
-                                    style = MaterialTheme.typography.bodyMedium
-                                )
-                                Text(
-                                    text = "Large model for conversation (expressive)",
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
-                                )
-                            }
-                            Spacer(modifier = Modifier.width(8.dp))
-                            TextButton(
-                                onClick = { showPersonalityDropdown = true }
-                            ) {
-                                Text(personalityModel)
-                                DropdownMenu(
-                                    expanded = showPersonalityDropdown,
-                                    onDismissRequest = { showPersonalityDropdown = false }
-                                ) {
-                                    availableModels.forEach { model ->
-                                        DropdownMenuItem(
-                                            text = { Text(model) },
-                                            onClick = {
-                                                personalityModel = model
-                                                appPreferences.personalityModel = model
-                                                showPersonalityDropdown = false
-                                            }
-                                        )
-                                    }
-                                }
-                            }
+                            Text(
+                                text = if (appPreferences.errorRecoveryModel.length > 25) 
+                                    "${appPreferences.errorRecoveryModel.take(25)}..." 
+                                else 
+                                    appPreferences.errorRecoveryModel,
+                                maxLines = 1
+                            )
                         }
                     }
                 }
@@ -483,6 +397,35 @@ fun SettingsScreen(
                         Icon(
                             Icons.Default.KeyboardArrowRight,
                             contentDescription = "Manage personalities",
+                            tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
+                        )
+                    }
+                    
+                    Divider()
+                    
+                    // Developer Settings
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable { onDeveloperClick() }
+                            .padding(vertical = 8.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Column {
+                            Text(
+                                text = "Developer",
+                                style = MaterialTheme.typography.bodyMedium
+                            )
+                            Text(
+                                text = "Advanced system configuration and prompts",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
+                            )
+                        }
+                        Icon(
+                            Icons.Default.KeyboardArrowRight,
+                            contentDescription = "Developer settings",
                             tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
                         )
                     }
@@ -658,55 +601,4 @@ fun SettingsScreen(
         )
     }
     
-    // Tool Server URL Edit Dialog
-    if (showToolServerDialog) {
-        AlertDialog(
-            onDismissRequest = { showToolServerDialog = false },
-            title = { Text("Edit Tool Server URL") },
-            text = {
-                Column {
-                    Text(
-                        text = "Enter the tool server URL (for fast planning & tools):",
-                        style = MaterialTheme.typography.bodyMedium,
-                        modifier = Modifier.padding(bottom = 8.dp)
-                    )
-                    OutlinedTextField(
-                        value = toolServerUrlInput,
-                        onValueChange = { toolServerUrlInput = it },
-                        label = { Text("Tool Server URL") },
-                        placeholder = { Text("http://192.168.1.120:11434") },
-                        singleLine = true,
-                        modifier = Modifier.fillMaxWidth()
-                    )
-                    Text(
-                        text = "Should be a separate server with lightweight models for fast responses",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
-                        modifier = Modifier.padding(top = 4.dp)
-                    )
-                }
-            },
-            confirmButton = {
-                TextButton(
-                    onClick = {
-                        appPreferences.toolOllamaServerUrl = toolServerUrlInput.trim()
-                        viewModel.loadAvailableModels() // Reload all models after URL change
-                        showToolServerDialog = false
-                    }
-                ) {
-                    Text("Save")
-                }
-            },
-            dismissButton = {
-                TextButton(
-                    onClick = { 
-                        toolServerUrlInput = appPreferences.toolOllamaServerUrl // Reset to current value
-                        showToolServerDialog = false 
-                    }
-                ) {
-                    Text("Cancel")
-                }
-            }
-        )
-    }
 }

@@ -1,5 +1,6 @@
 package com.yourname.coquettemobile.ui.personalities
 
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -24,11 +25,10 @@ import com.yourname.coquettemobile.core.database.entities.Personality
 @Composable
 fun PersonalityManagementScreen(
     onBackClick: () -> Unit,
+    onEditPersonality: (Personality?) -> Unit,
     viewModel: PersonalityManagementViewModel = hiltViewModel()
 ) {
     val personalities by viewModel.personalities.collectAsStateWithLifecycle()
-    var showAddDialog by remember { mutableStateOf(false) }
-    var editingPersonality by remember { mutableStateOf<Personality?>(null) }
 
     Scaffold(
         topBar = {
@@ -38,60 +38,33 @@ fun PersonalityManagementScreen(
                     IconButton(onClick = onBackClick) {
                         Icon(Icons.Default.ArrowBack, contentDescription = "Back")
                     }
-                },
-                actions = {
-                    IconButton(onClick = { showAddDialog = true }) {
-                        Icon(Icons.Default.Add, contentDescription = "Add Personality")
-                    }
                 }
             )
+        },
+        floatingActionButton = {
+            FloatingActionButton(onClick = {
+                onEditPersonality(null) // Add new personality
+            }) {
+                Icon(Icons.Default.Add, contentDescription = "Add Personality")
+            }
         }
     ) { innerPadding ->
         LazyColumn(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(innerPadding)
-                .padding(horizontal = 16.dp),
+                .padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(8.dp)
         ) {
             items(personalities) { personality ->
                 PersonalityCard(
                     personality = personality,
-                    onEdit = { editingPersonality = it },
+                    onEdit = { onEditPersonality(it) },
                     onDelete = { viewModel.deletePersonality(it) },
                     onSetDefault = { viewModel.setAsDefault(it.id) }
                 )
             }
         }
-    }
-
-    if (showAddDialog) {
-        PersonalityEditDialog(
-            personality = null,
-            onDismiss = { showAddDialog = false },
-            onSave = { name, emoji, description, systemPrompt ->
-                viewModel.addPersonality(name, emoji, description, systemPrompt)
-                showAddDialog = false
-            }
-        )
-    }
-
-    editingPersonality?.let { personality ->
-        PersonalityEditDialog(
-            personality = personality,
-            onDismiss = { editingPersonality = null },
-            onSave = { name, emoji, description, systemPrompt ->
-                viewModel.updatePersonality(
-                    personality.copy(
-                        name = name,
-                        emoji = emoji,
-                        description = description,
-                        systemPrompt = systemPrompt
-                    )
-                )
-                editingPersonality = null
-            }
-        )
     }
 }
 
@@ -103,141 +76,77 @@ fun PersonalityCard(
     onSetDefault: (Personality) -> Unit
 ) {
     Card(
-        modifier = Modifier.fillMaxWidth()
+        modifier = Modifier.fillMaxWidth().clickable { onEdit(personality) }
     ) {
-        Column(
-            modifier = Modifier.padding(16.dp)
-        ) {
+        Column(modifier = Modifier.padding(16.dp)) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
+                verticalAlignment = Alignment.Top
             ) {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Text(
-                        text = personality.emoji,
-                        style = MaterialTheme.typography.headlineSmall,
-                        modifier = Modifier.padding(end = 8.dp)
-                    )
-                    Column {
+                Column(modifier = Modifier.weight(1f)) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
                         Text(
-                            text = personality.name,
-                            style = MaterialTheme.typography.titleMedium
+                            text = personality.name, 
+                            style = MaterialTheme.typography.titleLarge
                         )
                         if (personality.isDefault) {
-                            Text(
-                                text = "Default",
-                                style = MaterialTheme.typography.labelSmall,
-                                color = MaterialTheme.colorScheme.primary
-                            )
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Surface(
+                                color = MaterialTheme.colorScheme.primaryContainer,
+                                contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
+                                shape = MaterialTheme.shapes.small
+                            ) {
+                                Text(
+                                    text = "DEFAULT",
+                                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+                                    style = MaterialTheme.typography.labelSmall
+                                )
+                            }
                         }
                     }
-                }
-                
-                Row {
-                    IconButton(
-                        onClick = { onSetDefault(personality) }
-                    ) {
-                        Icon(
-                            imageVector = if (personality.isDefault) Icons.Default.Star else Icons.Outlined.Star,
-                            contentDescription = "Set as default",
-                            tint = if (personality.isDefault) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface
-                        )
-                    }
-                    IconButton(onClick = { onEdit(personality) }) {
-                        Icon(Icons.Default.Edit, contentDescription = "Edit")
-                    }
-                    IconButton(onClick = { onDelete(personality) }) {
-                        Icon(Icons.Default.Delete, contentDescription = "Delete")
-                    }
+                    Spacer(modifier = Modifier.height(4.dp))
+                    Text(
+                        text = personality.description,
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f),
+                        maxLines = 2,
+                        overflow = TextOverflow.Ellipsis
+                    )
                 }
             }
             
-            Spacer(modifier = Modifier.height(8.dp))
+            Spacer(modifier = Modifier.height(12.dp))
             
-            Text(
-                text = personality.description,
-                style = MaterialTheme.typography.bodyMedium,
-                maxLines = 2,
-                overflow = TextOverflow.Ellipsis
-            )
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                OutlinedButton(
+                    onClick = { onEdit(personality) },
+                    modifier = Modifier.weight(1f)
+                ) {
+                    Text("Edit")
+                }
+                
+                if (!personality.isDefault) {
+                    OutlinedButton(
+                        onClick = { onSetDefault(personality) }
+                    ) {
+                        Text("Set Default")
+                    }
+                }
+                
+                OutlinedButton(
+                    onClick = { onDelete(personality) },
+                    colors = ButtonDefaults.outlinedButtonColors(
+                        contentColor = MaterialTheme.colorScheme.error
+                    )
+                ) {
+                    Text("Delete")
+                }
+            }
         }
     }
 }
 
-@OptIn(ExperimentalMaterial3Api::class)
-@Composable
-fun PersonalityEditDialog(
-    personality: Personality?,
-    onDismiss: () -> Unit,
-    onSave: (String, String, String, String) -> Unit
-) {
-    var name by remember { mutableStateOf(personality?.name ?: "") }
-    var emoji by remember { mutableStateOf(personality?.emoji ?: "🤖") }
-    var description by remember { mutableStateOf(personality?.description ?: "") }
-    var systemPrompt by remember { mutableStateOf(personality?.systemPrompt ?: "") }
-
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = {
-            Text(if (personality == null) "Add Personality" else "Edit Personality")
-        },
-        text = {
-            Column(
-                verticalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
-                OutlinedTextField(
-                    value = name,
-                    onValueChange = { name = it },
-                    label = { Text("Name") },
-                    singleLine = true,
-                    modifier = Modifier.fillMaxWidth()
-                )
-                
-                OutlinedTextField(
-                    value = emoji,
-                    onValueChange = { emoji = it },
-                    label = { Text("Emoji") },
-                    singleLine = true,
-                    modifier = Modifier.fillMaxWidth()
-                )
-                
-                OutlinedTextField(
-                    value = description,
-                    onValueChange = { description = it },
-                    label = { Text("Description") },
-                    maxLines = 3,
-                    modifier = Modifier.fillMaxWidth()
-                )
-                
-                OutlinedTextField(
-                    value = systemPrompt,
-                    onValueChange = { systemPrompt = it },
-                    label = { Text("System Prompt") },
-                    maxLines = 8,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(200.dp)
-                )
-            }
-        },
-        confirmButton = {
-            TextButton(
-                onClick = {
-                    if (name.isNotBlank() && systemPrompt.isNotBlank()) {
-                        onSave(name, emoji, description, systemPrompt)
-                    }
-                }
-            ) {
-                Text("Save")
-            }
-        },
-        dismissButton = {
-            TextButton(onClick = onDismiss) {
-                Text("Cancel")
-            }
-        }
-    )
-}

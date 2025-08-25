@@ -61,6 +61,7 @@ dependencies {
     implementation("androidx.compose.ui:ui-tooling-preview")
     implementation("androidx.compose.material3:material3:1.1.2")
     implementation("androidx.navigation:navigation-compose:2.7.6")
+    implementation("io.coil-kt:coil-compose:2.5.0")
     
     // Networking
     implementation("com.squareup.retrofit2:retrofit:2.9.0")
@@ -84,6 +85,13 @@ dependencies {
     implementation("com.google.dagger:hilt-android:2.48")
     ksp("com.google.dagger:hilt-compiler:2.48")
     implementation("androidx.hilt:hilt-navigation-compose:1.1.0")
+    
+    // Rich text / Markdown support
+    implementation("org.jetbrains:markdown:0.5.0")
+    
+    // HID Device Control and HTML parsing
+    implementation("com.github.topjohnwu.libsu:core:5.3.0")
+    implementation("org.jsoup:jsoup:1.17.2")
     
     testImplementation("junit:junit:4.13.2")
     androidTestImplementation("androidx.test.ext:junit:1.1.5")

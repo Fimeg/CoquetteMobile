@@ -4,6 +4,9 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.yourname.coquettemobile.core.database.entities.Personality
 import com.yourname.coquettemobile.core.repository.PersonalityRepository
+import com.yourname.coquettemobile.core.preferences.AppPreferences
+import com.yourname.coquettemobile.core.tools.MobileTool
+import com.yourname.coquettemobile.core.tools.MobileToolRegistry
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.stateIn
@@ -14,7 +17,9 @@ import javax.inject.Inject
 
 @HiltViewModel
 class PersonalityManagementViewModel @Inject constructor(
-    private val personalityRepository: PersonalityRepository
+    private val personalityRepository: PersonalityRepository,
+    private val appPreferences: AppPreferences,
+    private val mobileToolRegistry: MobileToolRegistry
 ) : ViewModel() {
 
     val personalities: StateFlow<List<Personality>> = personalityRepository
@@ -24,6 +29,9 @@ class PersonalityManagementViewModel @Inject constructor(
             started = SharingStarted.WhileSubscribed(5000),
             initialValue = emptyList()
         )
+
+    val availableTools: List<MobileTool>
+        get() = mobileToolRegistry.getAllTools()
 
     fun addPersonality(name: String, emoji: String, description: String, systemPrompt: String) {
         viewModelScope.launch {
@@ -35,6 +43,12 @@ class PersonalityManagementViewModel @Inject constructor(
                 systemPrompt = systemPrompt,
                 isDefault = false
             )
+            personalityRepository.insertPersonality(personality)
+        }
+    }
+
+    fun insertPersonality(personality: Personality) {
+        viewModelScope.launch {
             personalityRepository.insertPersonality(personality)
         }
     }
@@ -55,5 +69,17 @@ class PersonalityManagementViewModel @Inject constructor(
         viewModelScope.launch {
             personalityRepository.setAsDefault(personalityId)
         }
+    }
+    
+    fun getDefaultToolAwarenessPrompt(): String {
+        return appPreferences.defaultToolAwarenessPrompt ?: """You have access to various tools to help users with their requests:
+
+- WebFetchTool: Retrieve content from web URLs
+- ExtractorTool: Extract readable text from HTML content  
+- SummarizerTool: Create concise summaries of long text
+- DeviceContextTool: Get device information (battery, storage, network)
+- NotificationTool: Manage device notifications
+
+Use tools when they would be helpful for the user's request. Always explain what you're doing and why."""
     }
 }

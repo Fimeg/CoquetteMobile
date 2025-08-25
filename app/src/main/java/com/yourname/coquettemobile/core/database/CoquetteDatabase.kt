@@ -14,7 +14,7 @@ import com.yourname.coquettemobile.core.models.ChatMessage
 
 @Database(
     entities = [Personality::class, Conversation::class, ChatMessage::class],
-    version = 2,
+    version = 4,
     exportSchema = false
 )
 @TypeConverters(Converters::class)

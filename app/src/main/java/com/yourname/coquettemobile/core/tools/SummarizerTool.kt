@@ -23,6 +23,13 @@ class SummarizerTool @Inject constructor(
     override val requiredPermissions = emptyList<String>()
     
     override suspend fun execute(params: Map<String, Any>): ToolResult = withContext(Dispatchers.IO) {
+        executeStreaming(params) { /* ignore progress for sync execution */ }
+    }
+
+    override suspend fun executeStreaming(
+        params: Map<String, Any>,
+        onProgress: (String) -> Unit
+    ): ToolResult = withContext(Dispatchers.IO) {
         val text = params["text"] as? String
             ?: return@withContext ToolResult.error("Missing required parameter: text")
             
@@ -30,13 +37,18 @@ class SummarizerTool @Inject constructor(
         val targetLength = params["target_length"] as? Int ?: 5
         
         try {
+            onProgress("Starting summarization of ${text.length} characters...")
             logger.d("SummarizerTool", "Starting summarization: ${text.length} chars, format=$format, length=$targetLength")
+            
+            onProgress("Building summary prompt...")
             val summaryPrompt = buildSummaryPrompt(text, format, targetLength)
             
             // Use user's selected personality model for summarization
-            val summaryModel = appPreferences.personalityModel
-            logger.d("SummarizerTool", "Using model: $summaryModel")
+            val summaryModel = appPreferences.toolOllamaModel
+            logger.d("SummarizerTool", "Using tool model: $summaryModel")
+            onProgress("Using model: $summaryModel for summarization")
             
+            onProgress("Generating summary...")
             val response = ollamaService.generateResponse(
                 model = summaryModel,
                 prompt = summaryPrompt,
@@ -48,12 +60,15 @@ class SummarizerTool @Inject constructor(
             )
             
             if (response.isFailure) {
-                logger.e("SummarizerTool", "Summarization failed: ${response.exceptionOrNull()?.message}")
-                return@withContext ToolResult.error("Summarization failed: ${response.exceptionOrNull()?.message}")
+                val error = "Summarization failed: ${response.exceptionOrNull()?.message}"
+                logger.e("SummarizerTool", error)
+                onProgress(error)
+                return@withContext ToolResult.error(error)
             }
             
             val summary = response.getOrThrow().trim()
             logger.d("SummarizerTool", "Summarization completed: ${summary.length} chars output")
+            onProgress("Summary complete: ${summary.length} characters generated")
             
             ToolResult.success(
                 output = summary,
@@ -67,7 +82,9 @@ class SummarizerTool @Inject constructor(
             )
             
         } catch (e: Exception) {
-            ToolResult.error("Failed to summarize content: ${e.message}")
+            val error = "Failed to summarize content: ${e.message}"
+            onProgress(error)
+            ToolResult.error(error)
         }
     }
     
@@ -129,5 +146,20 @@ class SummarizerTool @Inject constructor(
             text.length > 50_000 -> "Text too long (max 50KB for summarization)"
             else -> null
         }
+    }
+    
+    override fun getParameterSchema(): String {
+        return """
+            Parameters:
+            - text (required, string): The text content to summarize
+              Minimum length: 100 characters
+              Maximum length: 50KB
+            - format (optional, string): Summary format - "bullets", "paragraph", "headlines", or "default"
+              Default: "bullets"
+            - target_length (optional, integer): Target number of points/sentences/headlines
+              Default: 5
+              
+            Example: {"text": "Long content to summarize...", "format": "bullets", "target_length": 3}
+        """.trimIndent()
     }
 }

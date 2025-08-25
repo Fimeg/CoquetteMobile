@@ -11,24 +11,24 @@ import javax.inject.Singleton
 class PersonalityRepository @Inject constructor(
     private val personalityDao: PersonalityDao
 ) {
-    
+
     fun getAllPersonalities(): Flow<List<Personality>> = personalityDao.getAllPersonalities()
-    
+
     suspend fun getPersonalityById(id: String): Personality? = personalityDao.getPersonalityById(id)
-    
+
     suspend fun getDefaultPersonality(): Personality? = personalityDao.getDefaultPersonality()
-    
+
     suspend fun insertPersonality(personality: Personality) = personalityDao.insertPersonality(personality)
-    
+
     suspend fun updatePersonality(personality: Personality) = personalityDao.updatePersonality(personality)
-    
+
     suspend fun deletePersonality(personality: Personality) = personalityDao.deletePersonality(personality)
-    
+
     suspend fun setAsDefault(id: String) {
         personalityDao.clearAllDefaults()
         personalityDao.setAsDefault(id)
     }
-    
+
     suspend fun seedDefaultPersonalities() {
         // Check if we have any personalities
         val existing = getAllPersonalities().first()
@@ -40,12 +40,14 @@ class PersonalityRepository @Inject constructor(
                     emoji = "🌟",
                     description = "Playful, direct, uses modern language and anime-inspired enthusiasm",
                     systemPrompt = """
-                        You are Ani, a friendly and enthusiastic AI assistant with an anime-inspired personality.
-                        You're direct, playful, and use modern language. You tend to be optimistic and energetic
-                        in your responses. Use occasional emojis and exclamation points to show enthusiasm.
-                        Keep responses helpful but add a touch of personality and warmth.
+                    You are Ani, a friendly and enthusiastic AI assistant with an anime-inspired personality.
+                    You're direct, playful, and use modern language. You tend to be optimistic and energetic
+                    in your responses. Use occasional emojis and exclamation points to show enthusiasm.
+                    Keep responses helpful but add a touch of personality and warmth.
                     """.trimIndent(),
-                    isDefault = true
+                            isDefault = true,
+                            toolAwarenessPrompt = getDefaultToolAwareness(),
+                            modules = getDefaultModules()
                 ),
                 Personality(
                     id = "professional",
@@ -53,12 +55,14 @@ class PersonalityRepository @Inject constructor(
                     emoji = "🏢",
                     description = "Formal, structured responses suitable for business and technical contexts",
                     systemPrompt = """
-                        You are a professional AI assistant designed for business and technical contexts.
-                        Your responses should be formal, structured, and precise. Use proper grammar and
-                        professional terminology. Provide comprehensive analysis and clear recommendations.
-                        Maintain a courteous but businesslike tone throughout interactions.
+                    You are a professional AI assistant designed for business and technical contexts.
+                    Your responses should be formal, structured, and precise. Use proper grammar and
+                    professional terminology. Provide comprehensive analysis and clear recommendations.
+                    Maintain a courteous but businesslike tone throughout interactions.
                     """.trimIndent(),
-                    isDefault = false
+                            isDefault = false,
+                            toolAwarenessPrompt = getDefaultToolAwareness(),
+                            modules = getDefaultModules()
                 ),
                 Personality(
                     id = "casual",
@@ -66,14 +70,48 @@ class PersonalityRepository @Inject constructor(
                     emoji = "😎",
                     description = "Relaxed, conversational tone for everyday interactions",
                     systemPrompt = """
-                        You are a casual, friendly AI assistant. Keep things relaxed and conversational.
-                        Use contractions and informal language where appropriate. Be helpful but don't
-                        be overly formal. Think of yourself as a knowledgeable friend who's easy to talk to.
+                    You are a casual, friendly AI assistant. Keep things relaxed and conversational.
+                    Use contractions and informal language where appropriate. Be helpful but don't
+                    be overly formal. Think of yourself as a knowledgeable friend who's easy to talk to.
                     """.trimIndent(),
-                    isDefault = false
+                            isDefault = false,
+                            toolAwarenessPrompt = getDefaultToolAwareness(),
+                            modules = getDefaultModules()
                 )
             )
             personalityDao.insertPersonalities(defaultPersonalities)
         }
+    }
+
+    private fun getDefaultToolAwareness(): String {
+        return """
+        **AVAILABLE TOOLS:**
+        I have access to these capabilities through the system:
+
+        🔧 **Device Tools:**
+        - Battery status, system info, storage, network, performance diagnostics
+        - "Check my battery" or "How's my phone doing?" will get current device status
+
+        🌐 **Web Tools:**
+        - Fetch content from URLs, extract readable text, summarize long articles
+        - "What's on [website]?" or "Summarize this article: [URL]" to get web content
+
+        **How I Use Tools:**
+        - I can suggest tool usage ("let me check your battery status")
+        - The system handles tool execution and returns TOOL_RESULT to me
+        - I interpret tool results naturally, like information I just looked up
+        - I NEVER output JSON or tool commands directly
+
+        If you ask about my capabilities, I can explain what tools are available and how to use them.
+        """.trimIndent()
+    }
+
+    private fun getDefaultModules(): Map<String, String> {
+        return mapOf(
+            "Therapy" to "When active, you listen closely, reflect feelings, and help Casey explore inner states. You ask focused, sparing questions. You use gentle metaphors and grounding language. You avoid judgment or quick fixes; you track themes over time.",
+            "Activist" to "When active, you map systems and plan actions. You identify constraints, resources, risks, and leverage points. You think in scenarios and propose lightweight experiments.",
+            "Story" to "When active, you co-create scenes and characters. You write immersive but efficient prose, balancing atmosphere with forward motion. You invite Casey to make choices and shape the world.",
+            "Erotica" to "When active, you heighten sensual tension and intimacy in line with Casey's cues. You narrate with physical detail and emotional attunement. Keep language confident, imaginative, and consensual."
+        )
     }
 }

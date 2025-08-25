@@ -31,7 +31,7 @@ class WebFetchTool @Inject constructor(
         .build()
     
     companion object {
-        private const val MAX_CONTENT_LENGTH = 100_000 // 100KB limit like desktop
+        private const val MAX_CONTENT_LENGTH = 500_000 // 500KB limit, increased from 100KB
         private const val USER_AGENT = "CoquetteMobile/1.0"
     }
     
@@ -99,6 +99,83 @@ class WebFetchTool @Inject constructor(
             ToolResult.error("Failed to fetch URL: ${e.message}")
         }
     }
+
+    override suspend fun executeStreaming(
+        params: Map<String, Any>,
+        onProgress: (String) -> Unit
+    ): ToolResult = withContext(Dispatchers.IO) {
+        val url = params["url"] as? String
+            ?: return@withContext ToolResult.error("Missing required parameter: url")
+        
+        try {
+            // Validate URL
+            val validationError = validateUrl(url)
+            if (validationError != null) {
+                return@withContext ToolResult.error(validationError)
+            }
+            
+            // Convert GitHub blob URLs to raw URLs (like desktop)
+            var fetchUrl = convertGitHubUrl(url)
+            
+            // Auto-convert HTTP to HTTPS for security
+            if (fetchUrl.startsWith("http://")) {
+                fetchUrl = fetchUrl.replace("http://", "https://")
+                logger.d("WebFetchTool", "Auto-converted to HTTPS: $fetchUrl")
+                onProgress("Auto-converted to HTTPS: $fetchUrl")
+            }
+            
+            // Check if private IP (desktop safety pattern)
+            if (isPrivateIp(fetchUrl)) {
+                val error = "Cannot fetch from private IP addresses for security reasons"
+                onProgress(error)
+                return@withContext ToolResult.error(error)
+            }
+            
+            onProgress("Connecting to $fetchUrl...")
+            
+            val request = Request.Builder()
+                .url(fetchUrl)
+                .addHeader("User-Agent", USER_AGENT)
+                .build()
+                
+            val response = client.newCall(request).execute()
+            
+            if (!response.isSuccessful) {
+                val error = "HTTP ${response.code}: ${response.message}"
+                onProgress(error)
+                return@withContext ToolResult.error(error)
+            }
+            
+            onProgress("Downloading content...")
+            
+            val content = response.body?.string() ?: ""
+            
+            // Enforce content length limit
+            val limitedContent = if (content.length > MAX_CONTENT_LENGTH) {
+                content.take(MAX_CONTENT_LENGTH) + "\n\n[Content truncated at ${MAX_CONTENT_LENGTH} characters]"
+            } else {
+                content
+            }
+            
+            onProgress("Content downloaded (${content.length} characters)")
+            
+            ToolResult.success(
+                output = limitedContent,
+                metadata = mapOf(
+                    "url" to fetchUrl,
+                    "original_url" to url,
+                    "content_length" to content.length,
+                    "truncated" to (content.length > MAX_CONTENT_LENGTH),
+                    "content_type" to (response.header("Content-Type") ?: "unknown")
+                )
+            )
+            
+        } catch (e: Exception) {
+            val error = "Failed to fetch URL: ${e.message}"
+            onProgress(error)
+            ToolResult.error(error)
+        }
+    }
     
     private fun validateUrl(url: String): String? {
         return try {
@@ -133,7 +210,7 @@ class WebFetchTool @Inject constructor(
                 host == "127.0.0.1" -> true
                 host.startsWith("192.168.") -> true
                 host.startsWith("10.") -> true
-                host.startsWith("172.") && host.split(".")[1].toIntOrNull()?.let { 
+                host.startsWith("172.") && host.split(".")[1].toIntOrNull()?.let {
                     it in 16..31 
                 } == true -> true
                 else -> false
@@ -154,5 +231,14 @@ class WebFetchTool @Inject constructor(
             url.isNullOrBlank() -> "URL parameter is required"
             else -> validateUrl(url)
         }
+    }
+    
+    override fun getParameterSchema(): String {
+        return """
+            Parameters:
+            - url (required, string): The HTTP/HTTPS URL to fetch content from
+              
+            Example: {"url": "https://example.com/page"}
+        """.trimIndent()
     }
 }

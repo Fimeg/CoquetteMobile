@@ -17,15 +17,26 @@ class ExtractorTool @Inject constructor() : MobileTool {
     override val requiredPermissions = emptyList<String>()
     
     override suspend fun execute(params: Map<String, Any>): ToolResult = withContext(Dispatchers.Default) {
+        executeStreaming(params) { /* ignore progress for sync execution */ }
+    }
+
+    override suspend fun executeStreaming(
+        params: Map<String, Any>,
+        onProgress: (String) -> Unit
+    ): ToolResult = withContext(Dispatchers.Default) {
         val html = params["html"] as? String
             ?: return@withContext ToolResult.error("Missing required parameter: html")
         
         try {
+            onProgress("Starting HTML extraction...")
+            
             // Use Android's built-in HTML parser for basic extraction
+            onProgress("Parsing HTML content...")
             val cleanText = Html.fromHtml(html, Html.FROM_HTML_MODE_LEGACY)
                 .toString()
                 .trim()
             
+            onProgress("Cleaning extracted text...")
             // Clean up excessive whitespace
             val normalizedText = cleanText
                 .replace(Regex("\\s+"), " ")
@@ -33,6 +44,8 @@ class ExtractorTool @Inject constructor() : MobileTool {
                 .trim()
             
             val wordCount = normalizedText.split("\\s+".toRegex()).size
+            
+            onProgress("Extraction complete: $wordCount words, ${normalizedText.length} characters")
             
             ToolResult.success(
                 output = normalizedText,
@@ -44,7 +57,9 @@ class ExtractorTool @Inject constructor() : MobileTool {
             )
             
         } catch (e: Exception) {
-            ToolResult.error("Failed to extract text from HTML: ${e.message}")
+            val error = "Failed to extract text from HTML: ${e.message}"
+            onProgress(error)
+            ToolResult.error(error)
         }
     }
     
@@ -59,5 +74,15 @@ class ExtractorTool @Inject constructor() : MobileTool {
             html.length > 500_000 -> "HTML content too large (max 500KB)"
             else -> null
         }
+    }
+    
+    override fun getParameterSchema(): String {
+        return """
+            Parameters:
+            - html (required, string): The HTML content to extract readable text from
+              Maximum size: 500KB
+              
+            Example: {"html": "<html><body><p>Content to extract</p></body></html>"}
+        """.trimIndent()
     }
 }

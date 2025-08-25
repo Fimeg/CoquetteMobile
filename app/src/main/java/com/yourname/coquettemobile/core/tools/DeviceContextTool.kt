@@ -10,6 +10,8 @@ import android.net.NetworkCapabilities
 import android.telephony.TelephonyManager
 import androidx.core.content.ContextCompat
 import dagger.hilt.android.qualifiers.ApplicationContext
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import javax.inject.Inject
 import javax.inject.Singleton
 import java.text.DecimalFormat
@@ -27,23 +29,52 @@ class DeviceContextTool @Inject constructor(
     )
     override val riskLevel = RiskLevel.LOW
     
-    override suspend fun execute(parameters: Map<String, Any>): ToolResult {
+    override suspend fun execute(parameters: Map<String, Any>): ToolResult = withContext(Dispatchers.Default) {
+        executeStreaming(parameters) { /* ignore progress for sync execution */ }
+    }
+
+    override suspend fun executeStreaming(
+        parameters: Map<String, Any>,
+        onProgress: (String) -> Unit
+    ): ToolResult {
         return try {
             val action = parameters["action"] as? String ?: "all"
             
+            onProgress("🔍 Gathering device context information...")
+            
             val result = when (action) {
-                "battery" -> getBatteryInfo()
-                "storage" -> getStorageInfo()
-                "network" -> getNetworkInfo()
-                "system" -> getSystemInfo()
-                "performance" -> getPerformanceInfo()
-                "all" -> getCompleteDeviceContext()
+                "battery" -> {
+                    onProgress("🔋 Checking battery status...")
+                    getBatteryInfo()
+                }
+                "storage" -> {
+                    onProgress("💾 Analyzing storage usage...")
+                    getStorageInfo()
+                }
+                "network" -> {
+                    onProgress("🌐 Checking network connectivity...")
+                    getNetworkInfo()
+                }
+                "system" -> {
+                    onProgress("📱 Gathering system information...")
+                    getSystemInfo()
+                }
+                "performance" -> {
+                    onProgress("⚡ Assessing performance status...")
+                    getPerformanceInfo()
+                }
+                "all" -> {
+                    onProgress("📊 Collecting complete device context...")
+                    getCompleteDeviceContext()
+                }
                 else -> return ToolResult.error("Unknown action: $action. Available: battery, storage, network, system, performance, all")
             }
             
+            onProgress("✅ Device context analysis complete!")
             ToolResult.success(result)
             
         } catch (e: Exception) {
+            onProgress("❌ Failed to gather device context")
             ToolResult.error("Failed to get device context: ${e.message}")
         }
     }
@@ -306,5 +337,9 @@ class DeviceContextTool @Inject constructor(
             action in listOf("all", "battery", "storage", "network", "system", "performance") -> null
             else -> "Invalid action: $action. Must be one of: all, battery, storage, network, system, performance"
         }
+    }
+    
+    override fun getParameterSchema(): String {
+        return "action?: \"battery\"|\"storage\"|\"network\"|\"system\"|\"performance\"|\"all\""
     }
 }
