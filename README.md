@@ -69,7 +69,7 @@ Complete transparency into AI reasoning with real-time thinking capture:
 - ✅ **Real-Time Transparency**: Complete visibility into AI reasoning
 - ✅ **Enterprise Security**: Risk assessment and permission validation
 
-## 📱 Screenshots
+## 📱 Screenshots & Live Demo
 
 <div align="center">
 
@@ -78,27 +78,12 @@ Complete transparency into AI reasoning with real-time thinking capture:
 | <img src="screenshots/hacker-news-example.png" width="250"> | <img src="screenshots/synthesis-example.png" width="250"> | <img src="screenshots/settings.png" width="250"> |
 | *"What's on Hacker News?" - Complete AI reasoning transparency* | *Synthesis phase: reasoning → conversation* | *Model & server configuration* |
 
+| **🎬 Live Demo** | **Full Video** | **Direct Access** |
+|:---:|:---:|:---:|
+| <img src="screenshots/orchestration-demo-full.gif" width="250"> | <details><summary>📹 <strong>Click to Play</strong></summary><video width="300" controls><source src="./screenshots/screen-20250828-144620.mp4" type="video/mp4"><a href="./screenshots/screen-20250828-144620.mp4">🎬 Download Demo</a></video></details> | **[📹 Direct Link](./screenshots/screen-20250828-144620.mp4)**<br><br>*45.8MB • 1:34 duration*<br>Complete orchestration flow |
+| *Real-time AI reasoning & execution* | *Full quality video with audio* | *Intent → Planning → Execution → Response* |
+
 </div>
-
-## 🎬 Live Demo
-
-**Complete AI Orchestration in Action**: Watch CoquetteMobile's 6-phase intelligent orchestration system handle "What's on Hacker News?" with real-time AI reasoning, planning, and execution.
-
-![Orchestration Demo](./screenshots/orchestration-demo.gif)
-
-<details>
-<summary>📹 <strong>Full Video (Click to Expand)</strong></summary>
-
-<video width="100%" controls>
-  <source src="./screenshots/screen-20250828-144620.mp4" type="video/mp4">
-  <a href="./screenshots/screen-20250828-144620.mp4">🎬 Download Demo Video (45.8MB)</a>
-</video>
-
-**[📹 Direct Video Link](./screenshots/screen-20250828-144620.mp4)** | **[📱 View All Screenshots](./screenshots/)**
-
-</details>
-
-*This demo showcases the complete flow: Intent Analysis → AI-Powered Planning → Tool Execution → Data Synthesis → Personality Response*
 
 ## 🏁 Getting Started
 
