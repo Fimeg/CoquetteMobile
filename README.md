@@ -65,17 +65,14 @@ Complete transparency into AI reasoning with real-time thinking capture:
 
 ## 📱 Screenshots
 
-### Evolving Thought Bubble in Action
-![Hacker News Example](screenshots/hacker-news-example.png)
-*Example: "What's on Hacker News?" - Shows the complete AI reasoning process from intent analysis through tool execution to final response synthesis*
+<div align="center">
 
-### Response Generation Phase
-![Synthesis Example](screenshots/synthesis-example.png)
-*The final synthesis phase where AI reasoning is transformed into a natural conversational response*
+| Evolving Thought Bubble | Response Generation | Configuration |
+|:---:|:---:|:---:|
+| <img src="screenshots/hacker-news-example.png" width="250"> | <img src="screenshots/synthesis-example.png" width="250"> | <img src="screenshots/settings.png" width="250"> |
+| *"What's on Hacker News?" - Complete AI reasoning transparency* | *Synthesis phase: reasoning → conversation* | *Model & server configuration* |
 
-### Configuration
-![Settings](screenshots/settings.png)
-*App settings for configuring AI models, server URLs, and operational parameters*
+</div>
 
 ## 🏁 Getting Started
 
