@@ -29,7 +29,7 @@ import com.yourname.coquettemobile.core.tools.HIDWorkflowTool
 import com.yourname.coquettemobile.core.orchestration.OrchestratorAgent
 import com.yourname.coquettemobile.core.orchestration.RouterRegistry
 import com.yourname.coquettemobile.core.orchestration.PersonalityOrchestrator
-import com.yourname.coquettemobile.core.orchestration.routers.SystemIntelRouter
+import com.yourname.coquettemobile.core.orchestration.routers.AndroidIntelRouter
 import com.yourname.coquettemobile.core.orchestration.routers.DesktopExploitRouter
 import com.yourname.coquettemobile.core.orchestration.routers.WebScraperRouter
 import com.yourname.coquettemobile.core.greeting.WelcomeMessageProvider
@@ -330,7 +330,7 @@ object AppModule {
 
     @Provides
     @Singleton
-    fun provideSystemIntelRouter(
+    fun provideAndroidIntelRouter(
         deviceContextTool: DeviceContextTool,
         webFetchTool: WebFetchTool,
         extractorTool: ExtractorTool,
@@ -339,8 +339,8 @@ object AppModule {
         grepTool: GrepTool,
         globTool: GlobTool,
         logger: CoquetteLogger
-    ): SystemIntelRouter {
-        return SystemIntelRouter(deviceContextTool, webFetchTool, extractorTool, summarizerTool, fileTool, grepTool, globTool, logger)
+    ): AndroidIntelRouter {
+        return AndroidIntelRouter(deviceContextTool, webFetchTool, extractorTool, summarizerTool, fileTool, grepTool, globTool, logger)
     }
 
     @Provides
@@ -360,9 +360,11 @@ object AppModule {
         webFetchTool: WebFetchTool,
         extractorTool: ExtractorTool,
         summarizerTool: SummarizerTool,
+        ollamaService: OllamaService,
+        appPreferences: AppPreferences,
         logger: CoquetteLogger
     ): WebScraperRouter {
-        return WebScraperRouter(webFetchTool, extractorTool, summarizerTool, logger)
+        return WebScraperRouter(webFetchTool, extractorTool, summarizerTool, ollamaService, appPreferences, logger)
     }
 
     @Provides
@@ -372,12 +374,12 @@ object AppModule {
         routerRegistry: RouterRegistry,
         appPreferences: AppPreferences,
         logger: CoquetteLogger,
-        systemIntelRouter: SystemIntelRouter, // Force initialization and registration
+        androidIntelRouter: AndroidIntelRouter, // Force initialization and registration
         desktopExploitRouter: DesktopExploitRouter,
         webScraperRouter: WebScraperRouter
     ): OrchestratorAgent {
         // Register routers dynamically
-        routerRegistry.registerRouter(systemIntelRouter)
+        routerRegistry.registerRouter(androidIntelRouter)
         routerRegistry.registerRouter(desktopExploitRouter)
         routerRegistry.registerRouter(webScraperRouter)
         

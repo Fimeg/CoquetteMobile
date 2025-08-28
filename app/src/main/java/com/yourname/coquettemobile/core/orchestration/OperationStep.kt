@@ -133,7 +133,7 @@ data class StepResult(
             )
         }
 
-        fun unsupported(stepId: String = "unknown", domain: RouterDomain = RouterDomain.SYSTEM_INTELLIGENCE): StepResult {
+        fun unsupported(stepId: String = "unknown", domain: RouterDomain = RouterDomain.ANDROID_INTELLIGENCE): StepResult {
             return StepResult(
                 stepId = stepId,
                 domain = domain,

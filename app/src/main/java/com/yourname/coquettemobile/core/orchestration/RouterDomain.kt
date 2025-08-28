@@ -5,7 +5,7 @@ package com.yourname.coquettemobile.core.orchestration
  * Each domain represents a category of operations that require domain expertise
  */
 enum class RouterDomain(val description: String) {
-    SYSTEM_INTELLIGENCE("Information gathering, reconnaissance, and environment analysis"),
+    ANDROID_INTELLIGENCE("Information gathering, reconnaissance, and environment analysis"),
     DESKTOP_EXPLOIT("Desktop HID operations, keyboard/mouse injection, and physical device control"),
     NETWORK_OPERATIONS("Network communication, data transfer, and connectivity"),
     FILE_OPERATIONS("File system manipulation, data extraction, and storage management"),

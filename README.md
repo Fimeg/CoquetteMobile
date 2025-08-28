@@ -34,13 +34,13 @@ Complete transparency into AI reasoning with real-time thinking capture:
 
 ```
 📋 "{Personality}'s Reasoning" (Main Dropdown)
-├── 💜 Intent Analysis (Independent Dropdown)
+├── Intent Analysis (Independent Dropdown)
 │   └── Thinking: "User is asking for real-time content from Hacker News..."
-├── 💙 Tool Planning (Independent Dropdown)  
+├── Tool Planning (Independent Dropdown)  
 │   └── Thinking: "I need to break this down: 1) fetch content, 2) extract..."
-├── 💚 Tool Execution (Independent Dropdown)
+├── Tool Execution (Independent Dropdown)
 │   └── Thinking: Shows tool execution details and results
-└── 🧡 Response Generation (Independent Dropdown)
+└── Response Generation (Independent Dropdown)
     └── Thinking: "Now I need to synthesize these results into..."
 ```
 
@@ -79,6 +79,26 @@ Complete transparency into AI reasoning with real-time thinking capture:
 | *"What's on Hacker News?" - Complete AI reasoning transparency* | *Synthesis phase: reasoning → conversation* | *Model & server configuration* |
 
 </div>
+
+## 🎬 Live Demo
+
+**Complete AI Orchestration in Action**: Watch CoquetteMobile's 6-phase intelligent orchestration system handle "What's on Hacker News?" with real-time AI reasoning, planning, and execution.
+
+![Orchestration Demo](./screenshots/orchestration-demo.gif)
+
+<details>
+<summary>📹 <strong>Full Video (Click to Expand)</strong></summary>
+
+<video width="100%" controls>
+  <source src="./screenshots/screen-20250828-144620.mp4" type="video/mp4">
+  <a href="./screenshots/screen-20250828-144620.mp4">🎬 Download Demo Video (45.8MB)</a>
+</video>
+
+**[📹 Direct Video Link](./screenshots/screen-20250828-144620.mp4)** | **[📱 View All Screenshots](./screenshots/)**
+
+</details>
+
+*This demo showcases the complete flow: Intent Analysis → AI-Powered Planning → Tool Execution → Data Synthesis → Personality Response*
 
 ## 🏁 Getting Started
 

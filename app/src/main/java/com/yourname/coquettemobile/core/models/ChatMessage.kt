@@ -47,6 +47,12 @@ sealed class OrchestrationPhase {
         override val thinking: List<String>,
         val response: String
     ) : OrchestrationPhase()
+
+    @Serializable
+    data class PersonalityResponsePhase(
+        override val thinking: List<String>,
+        val response: String
+    ) : OrchestrationPhase()
 }
 
 

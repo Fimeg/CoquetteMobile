@@ -1,8 +1,14 @@
 package com.yourname.coquettemobile.core.orchestration.routers
 
+import com.yourname.coquettemobile.core.ai.OllamaService
 import com.yourname.coquettemobile.core.logging.CoquetteLogger
 import com.yourname.coquettemobile.core.orchestration.*
+import com.yourname.coquettemobile.core.preferences.AppPreferences
 import com.yourname.coquettemobile.core.tools.*
+import kotlinx.coroutines.flow.collect
+import kotlinx.serialization.Serializable
+import kotlinx.serialization.decodeFromString
+import kotlinx.serialization.json.Json
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -13,10 +19,14 @@ import javax.inject.Singleton
 @Singleton
 class WebScraperRouter @Inject constructor(
     private val webFetchTool: WebFetchTool,
-        private val extractorTool: ExtractorTool,
-            private val summarizerTool: SummarizerTool,
-                private val logger: CoquetteLogger
+    private val extractorTool: ExtractorTool,
+    private val summarizerTool: SummarizerTool,
+    private val ollamaService: OllamaService,
+    private val appPreferences: AppPreferences,
+    private val logger: CoquetteLogger
 ) : ToolRouter {
+
+    private val json = Json { ignoreUnknownKeys = true; isLenient = true }
 
     override val domain = RouterDomain.WEB_INTELLIGENCE
     override val name = "WebScraperRouter"
@@ -72,10 +82,127 @@ class WebScraperRouter @Inject constructor(
     }
 
     override suspend fun planSubSteps(goal: String, context: OperationContext): List<OperationStep> {
-        // WebScraperRouter doesn't create sub-steps - it handles requests directly
-        // This is the "department expertise" approach
-        return emptyList()
+        logger.d(name, "WebScraperRouter using AI to plan for: $goal")
+        
+        return try {
+            val aiGeneratedPlan = generatePlanWithAI(goal, context)
+            aiGeneratedPlan.ifEmpty {
+                // Fallback if AI planning fails
+                listOf(
+                    OperationStep(
+                        id = "web_intelligence_${System.currentTimeMillis()}",
+                        type = StepType.WEB_INTELLIGENCE,
+                        domain = domain,
+                        description = goal,
+                        dependencies = emptyList()
+                    )
+                )
+            }
+        } catch (e: Exception) {
+            logger.e(name, "AI planning failed: ${e.message}, using fallback")
+            listOf(
+                OperationStep(
+                    id = "web_intelligence_${System.currentTimeMillis()}",
+                    type = StepType.WEB_INTELLIGENCE,
+                    domain = domain,
+                    description = goal,
+                    dependencies = emptyList()
+                )
+            )
+        }
     }
+
+    private suspend fun generatePlanWithAI(goal: String, context: OperationContext): List<OperationStep> {
+        val planningPrompt = buildPlanningPrompt(goal, context)
+        val model = appPreferences.orchestratorModel ?: "deepseek-r1:1.5b"
+        
+        val responseBuilder = StringBuilder()
+        ollamaService.sendMessageStream(
+            message = planningPrompt,
+            model = model,
+            systemPrompt = "You are a web scraping specialist. Analyze requests and create step-by-step execution plans."
+        ).collect { chunk ->
+            responseBuilder.append(chunk)
+        }
+        
+        val response = responseBuilder.toString()
+        logger.d(name, "AI planning response: $response")
+        
+        return try {
+            val planResponse = json.decodeFromString<WebScrapingPlan>(extractJsonFromResponse(response))
+            planResponse.steps.mapIndexed { index, step ->
+                OperationStep(
+                    id = "web_step_${System.currentTimeMillis()}_$index",
+                    type = mapStepType(step.type),
+                    domain = domain,
+                    description = step.description,
+                    dependencies = step.dependencies
+                )
+            }
+        } catch (e: Exception) {
+            logger.e(name, "Failed to parse AI plan: ${e.message}")
+            emptyList()
+        }
+    }
+
+    private fun buildPlanningPrompt(goal: String, context: OperationContext): String {
+        return """
+        You are WebScraperRouter, a domain expert in web content analysis and extraction.
+        
+        User Request: "$goal"
+        
+        Available step types:
+        - WEB_CONTENT_FETCH: Fetch content from a specific URL
+        - CONTENT_EXTRACTION: Extract specific data from fetched content  
+        - DATA_SUMMARIZATION: Summarize and process extracted information
+        - WEB_INTELLIGENCE: General web intelligence gathering
+        
+        Create a JSON execution plan with steps needed to fulfill this web-related request.
+        Think about what websites to access, what data to extract, and how to process it.
+        
+        Response format:
+        {
+          "steps": [
+            {
+              "type": "WEB_CONTENT_FETCH",
+              "description": "Fetch content from target website",
+              "dependencies": []
+            }
+          ]
+        }
+        """.trimIndent()
+    }
+
+    private fun extractJsonFromResponse(response: String): String {
+        val startIndex = response.indexOf('{')
+        val endIndex = response.lastIndexOf('}') + 1
+        return if (startIndex != -1 && endIndex > startIndex) {
+            response.substring(startIndex, endIndex)
+        } else {
+            response
+        }
+    }
+
+    private fun mapStepType(typeString: String): StepType {
+        return when (typeString.uppercase()) {
+            "WEB_CONTENT_FETCH" -> StepType.WEB_CONTENT_FETCH
+            "CONTENT_EXTRACTION" -> StepType.CONTENT_EXTRACTION
+            "DATA_SUMMARIZATION" -> StepType.DATA_SUMMARIZATION
+            else -> StepType.WEB_INTELLIGENCE
+        }
+    }
+
+    @Serializable
+    data class WebScrapingPlan(
+        val steps: List<PlanStep>
+    )
+
+    @Serializable
+    data class PlanStep(
+        val type: String,
+        val description: String,
+        val dependencies: List<String> = emptyList()
+    )
 
     override suspend fun validateCapabilities(operation: OperationStep): ValidationResult {
         // Basic validation - we have all the tools we need

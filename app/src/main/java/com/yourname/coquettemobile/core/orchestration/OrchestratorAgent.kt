@@ -25,37 +25,79 @@ class OrchestratorAgent @Inject constructor(
 ) {
 
     /**
-     * CEO Decision: Choose the right department and delegate the entire request
+     * CEO Decision: Choose the right department and return it
+     */
+    suspend fun selectDepartment(
+        userIntent: String,
+        context: OperationContext
+    ): ToolRouter? {
+        logger.i("OrchestratorAgent", "CEO selecting department for: $userIntent")
+        return selectAppropriateRouter(userIntent, context)
+    }
+
+    /**
+     * Execute the planned steps
+     */
+    suspend fun executeSteps(
+        steps: List<OperationStep>,
+        context: OperationContext
+    ): List<StepResult> {
+        logger.i("OrchestratorAgent", "Executing ${steps.size} steps")
+        
+        val results = mutableListOf<StepResult>()
+        
+        for (step in steps) {
+            val router = selectRouterForDomain(step.domain)
+            if (router != null) {
+                val result = router.executeStep(step, context)
+                results.add(result)
+            } else {
+                results.add(
+                    StepResult.failure(
+                        step.id,
+                        step.domain,
+                        "No router available for domain: ${step.domain}",
+                        0L
+                    )
+                )
+            }
+        }
+        
+        return results
+    }
+
+    /**
+     * Legacy method - now delegates to plan + execute flow
      */
     suspend fun delegateRequest(
         userIntent: String,
         context: OperationContext
     ): StepResult {
-        logger.i("OrchestratorAgent", "CEO delegating request: $userIntent")
-        
-        // Simple CEO decision making - pick the right department
         val selectedRouter = selectAppropriateRouter(userIntent, context)
         if (selectedRouter == null) {
             return StepResult.failure(
                 "delegation_failed",
-                RouterDomain.SYSTEM_INTELLIGENCE,
+                RouterDomain.ANDROID_INTELLIGENCE,
                 "No suitable department found for request: $userIntent",
                 0L
             )
         }
         
-        logger.i("OrchestratorAgent", "Delegating to ${selectedRouter.name} for: $userIntent")
-        
-        // Create a simple delegation step
         val delegationStep = OperationStep(
             id = "ceo_delegation",
             type = determineStepType(userIntent, selectedRouter.domain),
             domain = selectedRouter.domain,
-            description = userIntent // Pass the full user request
+            description = userIntent
         )
         
-        // Let the department handle it their way
         return selectedRouter.executeStep(delegationStep, context)
+    }
+
+    /**
+     * Find router by domain
+     */
+    private fun selectRouterForDomain(domain: RouterDomain): ToolRouter? {
+        return routerRegistry.getAllRouters().find { it.domain == domain }
     }
 
     /**
@@ -72,16 +114,16 @@ class OrchestratorAgent @Inject constructor(
             intent.contains("scrape") || intent.contains("fetch") ||
             intent.contains("what's on") -> availableRouters.find { it.domain == RouterDomain.WEB_INTELLIGENCE }
             
-            // System analysis goes to SystemIntelRouter  
+            // System analysis goes to AndroidIntelRouter  
             intent.contains("system") || intent.contains("device") ||
-            intent.contains("analyze") || intent.contains("info") -> availableRouters.find { it.domain == RouterDomain.SYSTEM_INTELLIGENCE }
+            intent.contains("analyze") || intent.contains("info") -> availableRouters.find { it.domain == RouterDomain.ANDROID_INTELLIGENCE }
             
             // Desktop HID operations go to DesktopExploitRouter  
             intent.contains("execute") || intent.contains("script") ||
             intent.contains("install") || intent.contains("run") -> availableRouters.find { it.domain == RouterDomain.DESKTOP_EXPLOIT }
             
-            // Default fallback - try SystemIntelRouter for general requests
-            else -> availableRouters.find { it.domain == RouterDomain.SYSTEM_INTELLIGENCE }
+            // Default fallback - try AndroidIntelRouter for general requests
+            else -> availableRouters.find { it.domain == RouterDomain.ANDROID_INTELLIGENCE }
         }
     }
 
@@ -93,7 +135,7 @@ class OrchestratorAgent @Inject constructor(
         
         return when (domain) {
             RouterDomain.WEB_INTELLIGENCE -> StepType.WEB_INTELLIGENCE
-            RouterDomain.SYSTEM_INTELLIGENCE -> when {
+            RouterDomain.ANDROID_INTELLIGENCE -> when {
                 intent.contains("analyze") -> StepType.TARGET_ANALYSIS
                 intent.contains("scan") -> StepType.ENVIRONMENT_DISCOVERY
                 else -> StepType.CAPABILITY_ASSESSMENT

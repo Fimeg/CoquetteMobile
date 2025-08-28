@@ -121,7 +121,8 @@ private fun PhaseCard(phase: OrchestrationPhase) {
         is OrchestrationPhase.IntentAnalysisPhase -> Triple(Color(0xFF9C27B0), "Intent Analysis", Icons.Default.Search) // Purple
         is OrchestrationPhase.PlanningPhase -> Triple(Color(0xFF2196F3), "Tool Planning", Icons.Default.List) // Blue  
         is OrchestrationPhase.ExecutionPhase -> Triple(Color(0xFF4CAF50), "Tool Execution", Icons.Default.Build) // Green
-        is OrchestrationPhase.SynthesisPhase -> Triple(Color(0xFFFF9800), "Response Generation", Icons.Default.Create) // Orange
+        is OrchestrationPhase.SynthesisPhase -> Triple(Color(0xFFFF9800), "Synthesis", Icons.Default.Create) // Orange
+        is OrchestrationPhase.PersonalityResponsePhase -> Triple(Color(0xFFE91E63), "Personality Response", Icons.Default.Person) // Pink
     }
 
     var isPhaseExpanded by remember { mutableStateOf(true) }
@@ -236,7 +237,18 @@ private fun PhaseCard(phase: OrchestrationPhase) {
                         is OrchestrationPhase.SynthesisPhase -> {
                             if (phase.response.isNotBlank()) {
                                 Text(
-                                    text = "📝 Generated Response Ready",
+                                    text = "📝 Data Synthesis Complete",
+                                    style = MaterialTheme.typography.bodySmall.copy(
+                                        fontStyle = FontStyle.Italic,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
+                                    )
+                                )
+                            }
+                        }
+                        is OrchestrationPhase.PersonalityResponsePhase -> {
+                            if (phase.response.isNotBlank()) {
+                                Text(
+                                    text = "🎭 Personality Response Generated",
                                     style = MaterialTheme.typography.bodySmall.copy(
                                         fontStyle = FontStyle.Italic,
                                         color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)

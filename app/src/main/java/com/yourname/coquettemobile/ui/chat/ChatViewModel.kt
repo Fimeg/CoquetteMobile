@@ -195,6 +195,7 @@ class ChatViewModel @Inject constructor(
                                 is OrchestrationPhase.PlanningPhase -> lastPhase.copy(thinking = lastPhase.thinking + update.thoughts)
                                 is OrchestrationPhase.ExecutionPhase -> lastPhase.copy(thinking = lastPhase.thinking + update.thoughts)
                                 is OrchestrationPhase.SynthesisPhase -> lastPhase.copy(thinking = lastPhase.thinking + update.thoughts)
+                                is OrchestrationPhase.PersonalityResponsePhase -> lastPhase.copy(thinking = lastPhase.thinking + update.thoughts)
                             }
                             phases[phases.size - 1] = updatedPhase
                             liveMessage = liveMessage.copy(orchestrationPhases = phases.toList())

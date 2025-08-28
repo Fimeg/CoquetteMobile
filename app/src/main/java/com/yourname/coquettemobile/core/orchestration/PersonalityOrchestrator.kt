@@ -76,18 +76,48 @@ class PersonalityOrchestrator @Inject constructor(
             logger.i("PersonalityOrchestrator", "Delegating complex request to CEO")
             
             launch {
-                val delegationResult = orchestratorAgent.delegateRequest(userMessage, context)
-                send(OrchestrationUpdate.StepExecution(delegationResult))
+                // Phase 2: CEO selects department
+                val selectedRouter = orchestratorAgent.selectDepartment(userMessage, context)
+                if (selectedRouter == null) {
+                    send(OrchestrationUpdate.Error("No suitable department found"))
+                    return@launch
+                }
 
-                // Phase 4: Synthesis - create final response from delegation result
-                val stepResults = listOf(delegationResult)
+                // Phase 3: Department creates plan
+                val subSteps = selectedRouter.planSubSteps(userMessage, context)
+                val totalDuration = subSteps.sumOf { selectedRouter.estimateExecutionTime(it) }
+                val executionPlan = ExecutionPlan(
+                    planId = "dept_plan_${System.currentTimeMillis()}",
+                    originalIntent = userMessage,
+                    steps = subSteps,
+                    estimatedDurationMs = totalDuration,
+                    riskLevel = com.yourname.coquettemobile.core.tools.RiskLevel.MEDIUM
+                )
+                send(OrchestrationUpdate.PlanGenerated(executionPlan))
+
+                // Phase 4: Department executes each step
+                val stepResults = mutableListOf<StepResult>()
+                for (step in subSteps) {
+                    val result = selectedRouter.executeStep(step, context)
+                    stepResults.add(result)
+                    send(OrchestrationUpdate.StepExecution(result))
+                }
+
+                // Phase 5: Synthesis - create final response from all step results
                 val finalSummary = synthesizeFinalResponseStreaming(stepResults, context) { thinkingSteps ->
                     launch { send(OrchestrationUpdate.Thinking(thinkingSteps)) }
                 }
+                
+                // Phase 6: Let personality process the consolidated data
+                val unityResponse = unifiedReasoningAgent.processRequest(
+                    query = "Tool results: $finalSummary\n\nOriginal request: $userMessage",
+                    conversationHistory = conversationHistory,
+                    personality = personality
+                )
                 val finalResponse = PersonalityResponse.Simple(
                     personalityName = personality.name,
-                    message = finalSummary,
-                    thinkingSteps = listOf("Operation delegated and completed."),
+                    message = unityResponse.directResponse ?: finalSummary,
+                    thinkingSteps = unityResponse.reasoning?.let { listOf(it) } ?: emptyList(),
                     toolExecutions = emptyList()
                 )
                 send(OrchestrationUpdate.Complete(finalResponse))
@@ -127,7 +157,7 @@ class PersonalityOrchestrator @Inject constructor(
         ollamaService.sendMessageStream(
             message = analysisPrompt,
             model = modelToUse,
-            systemPrompt = "You are an intent analysis specialist. Respond only with valid JSON. Use <think> tags for your reasoning process."
+            systemPrompt = "You are an intent analysis specialist. Respond only with valid JSON."
         ).collect { chunk ->
             responseBuilder.append(chunk)
             val contentSoFar = responseBuilder.toString()
@@ -178,7 +208,7 @@ class PersonalityOrchestrator @Inject constructor(
                 complexity = OperationComplexity.COMPLEX,
                 reasoning = "Parse failure fallback: ${e.message}",
                 riskLevel = RiskLevel.MEDIUM,
-                requiredSpecialists = listOf("SystemIntel")
+                requiredSpecialists = listOf("AndroidIntel")
             )
         }
     }
@@ -240,7 +270,7 @@ class PersonalityOrchestrator @Inject constructor(
         ollamaService.sendMessageStream(
             message = planningPrompt,
             model = modelToUse,
-            systemPrompt = "You are the OrchestratorAgent CEO. Create execution plans with <think> tags for your reasoning process."
+            systemPrompt = "You are the OrchestratorAgent CEO. Create execution plans."
         ).collect { chunk ->
             responseBuilder.append(chunk)
             val contentSoFar = responseBuilder.toString()
@@ -272,7 +302,7 @@ class PersonalityOrchestrator @Inject constructor(
         ollamaService.sendMessageStream(
             message = synthesisPrompt,
             model = modelToUse,
-            systemPrompt = "You are synthesizing operation results. Use <think> tags for your reasoning process."
+            systemPrompt = "You are synthesizing operation results."
         ).collect { chunk ->
             responseBuilder.append(chunk)
             val contentSoFar = responseBuilder.toString()
@@ -294,13 +324,7 @@ class PersonalityOrchestrator @Inject constructor(
         return """
         **User's Request:** "$userIntent"
 
-        <think>
-        I need to analyze this request and break it down into a logical execution plan.
-        What are the key steps needed to accomplish this goal?
-        What tools and capabilities will be required?
-        </think>
-
-        Based on the user's request, create the most direct and efficient execution plan to accomplish the goal.
+        Analyze this request and create the most direct and efficient execution plan to accomplish the goal.
         """.trimIndent()
     }
 
@@ -311,20 +335,13 @@ class PersonalityOrchestrator @Inject constructor(
         return """
         Operation: ${context.originalIntent}
 
-        Successful Steps (${successfulResults.size}):
-        ${successfulResults.joinToString("\n") { "- ${it.stepId}: ${it.data}" }}
+        Tool Results:
+        ${successfulResults.joinToString("\n") { "✅ ${it.stepId}: ${it.data}" }}
+        ${if (failedResults.isNotEmpty()) "\nFailed:\n${failedResults.joinToString("\n") { "❌ ${it.stepId}: ${it.error}" }}" else ""}
 
-        Failed Steps (${failedResults.size}):
-        ${failedResults.joinToString("\n") { "- ${it.stepId}: ${it.error}" }}
-
-        <think>
-        Now I need to synthesize these results into a natural, conversational response.
-        What was accomplished? What are the key findings?
-        How should I present this information to the user in a helpful way?
-        </think>
-
-        Synthesize these results into a natural, conversational response for the user.
-        Focus on what was accomplished and any important findings.
+        Consolidate this raw data into a clean summary.
+        Do not create conversational responses - just amalgamate the information.
+        The personality will handle final response generation.
         """.trimIndent()
     }
 

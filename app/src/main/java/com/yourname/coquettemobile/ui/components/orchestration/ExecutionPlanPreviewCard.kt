@@ -137,7 +137,7 @@ fun ExecutionPlanPreviewCard(
                 ) {
                     Icon(Icons.Default.Close, contentDescription = null, modifier = Modifier.size(16.dp))
                     Spacer(modifier = Modifier.width(4.dp))
-                    Text("Cancel")
+                    Text("No")
                 }
                 
                 OutlinedButton(
@@ -145,11 +145,12 @@ fun ExecutionPlanPreviewCard(
                 ) {
                     Icon(Icons.Default.Edit, contentDescription = null, modifier = Modifier.size(16.dp))
                     Spacer(modifier = Modifier.width(4.dp))
-                    Text("Modify")
+                    Text("Edit")
                 }
                 
                 Button(
                     onClick = onExecute,
+                    enabled = executionPlan.steps.isNotEmpty(),
                     colors = ButtonDefaults.buttonColors(
                         containerColor = when (executionPlan.riskLevel) {
                             RiskLevel.LOW -> MaterialTheme.colorScheme.primary
@@ -161,7 +162,7 @@ fun ExecutionPlanPreviewCard(
                 ) {
                     Icon(Icons.Default.PlayArrow, contentDescription = null, modifier = Modifier.size(16.dp))
                     Spacer(modifier = Modifier.width(4.dp))
-                    Text("Execute")
+                    Text("Yes")
                 }
             }
         }
@@ -327,7 +328,7 @@ private fun MetadataChip(
 // Utility functions
 private fun getRouterColor(domain: RouterDomain): Color {
     return when (domain) {
-        RouterDomain.SYSTEM_INTELLIGENCE -> Color(0xFF2196F3)
+        RouterDomain.ANDROID_INTELLIGENCE -> Color(0xFF2196F3)
         RouterDomain.DESKTOP_EXPLOIT -> Color(0xFFFF5722)  
         RouterDomain.NETWORK_OPERATIONS -> Color(0xFF4CAF50)
         RouterDomain.FILE_OPERATIONS -> Color(0xFFFF9800)
@@ -341,7 +342,7 @@ private fun getRouterColor(domain: RouterDomain): Color {
 
 private fun getRouterIcon(domain: RouterDomain): String {
     return when (domain) {
-        RouterDomain.SYSTEM_INTELLIGENCE -> "🔍"
+        RouterDomain.ANDROID_INTELLIGENCE -> "🔍"
         RouterDomain.DESKTOP_EXPLOIT -> "🖱️"
         RouterDomain.NETWORK_OPERATIONS -> "🌐" 
         RouterDomain.FILE_OPERATIONS -> "📁"
