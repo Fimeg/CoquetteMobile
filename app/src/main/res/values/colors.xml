@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="purple_200">#FFBB86FC</color>
+    <color name="purple_500">#FF6200EE</color>
+    <color name="purple_700">#FF3700B3</color>
+    <color name="teal_200">#FF03DAC5</color>
+    <color name="teal_700">#FF018786</color>
+    <color name="black">#FF000000</color>
+    <color name="white">#FFFFFFFF</color>
+    
+    <!-- Coquette Mobile specific colors -->
+    <color name="primary">#FF6A0DAD</color>
+    <color name="primary_dark">#FF4A0A7A</color>
+    <color name="secondary">#FF9C27B0</color>
+    <color name="surface">#FFFFFFFF</color>
+    <color name="background">#FFF5F5F5</color>
+    <color name="on_primary">#FFFFFFFF</color>
+    <color name="on_secondary">#FFFFFFFF</color>
+    <color name="on_surface">#FF000000</color>
+    <color name="on_background">#FF000000</color>
+    
+    <!-- Chat colors -->
+    <color name="user_message">#FFE3F2FD</color>
+    <color name="assistant_message">#FFF3E5F5</color>
+    <color name="system_message">#FFF5F5F5</color>
+    <color name="error_message">#FFFFEBEE</color>
+    
+    <!-- Model specific colors -->
+    <color name="gemma_color">#FF4CAF50</color>
+    <color name="deepseek_color">#FF2196F3</color>
+    <color name="context7_color">#FFFF9800</color>
+</resources>
