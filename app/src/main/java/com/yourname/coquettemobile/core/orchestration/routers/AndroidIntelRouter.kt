@@ -13,13 +13,11 @@ import javax.inject.Singleton
 @Singleton
 class AndroidIntelRouter @Inject constructor(
     private val deviceContextTool: DeviceContextTool,
-    private val webFetchTool: WebFetchTool,
-    private val extractorTool: ExtractorTool,
-    private val summarizerTool: SummarizerTool,
-    // Note: NetworkScanTool will be implemented in future iteration
     private val fileTool: FileTool,
     private val grepTool: GrepTool,
     private val globTool: GlobTool,
+    private val ollamaService: com.yourname.coquettemobile.core.ai.OllamaService,
+    private val appPreferences: com.yourname.coquettemobile.core.preferences.AppPreferences,
     private val logger: CoquetteLogger
 ) : ToolRouter {
     
@@ -28,21 +26,16 @@ class AndroidIntelRouter @Inject constructor(
     
     override val managedTools: List<MobileTool> = listOf(
         deviceContextTool,
-        webFetchTool,
-        extractorTool,
-        summarizerTool,
         fileTool,
         grepTool,
         globTool
     )
     
     override val capabilities = listOf(
-        "system analysis", "environment discovery", "target reconnaissance",
-        "device information", "network scanning", "vulnerability assessment",
-        "file system analysis", "configuration discovery", "capability assessment",
-        "system profiling", "resource enumeration", "security analysis",
-        "web content fetching", "data extraction", "content summarization",
-        "web intelligence gathering", "external data retrieval"
+        "device information", "system analysis", "local file operations",
+        "android diagnostics", "storage analysis", "app management", 
+        "network configuration", "device settings", "performance monitoring",
+        "battery diagnostics", "local security scanning", "permission analysis"
     )
     
     override val priority = 80 // High priority for intelligence gathering
@@ -54,10 +47,7 @@ class AndroidIntelRouter @Inject constructor(
             StepType.CAPABILITY_ASSESSMENT,
             StepType.VULNERABILITY_SCAN,
             StepType.FILE_ENUMERATION,
-            StepType.DIRECTORY_ANALYSIS,
-            StepType.WEB_CONTENT_FETCH,
-            StepType.CONTENT_EXTRACTION,
-            StepType.DATA_SUMMARIZATION -> true
+            StepType.DIRECTORY_ANALYSIS -> true
             else -> operation.domain == domain
         }
     }
@@ -74,9 +64,7 @@ class AndroidIntelRouter @Inject constructor(
                 StepType.VULNERABILITY_SCAN -> scanVulnerabilities(step, context)
                 StepType.FILE_ENUMERATION -> enumerateFiles(step, context)
                 StepType.DIRECTORY_ANALYSIS -> analyzeDirectories(step, context)
-                StepType.WEB_CONTENT_FETCH -> fetchWebContent(step, context)
-                StepType.CONTENT_EXTRACTION -> extractContent(step, context)
-                StepType.DATA_SUMMARIZATION -> summarizeData(step, context)
+                // Web operations belong to WebScraperRouter domain
                 else -> StepResult.unsupported(step.id, domain)
             }
         } catch (e: Exception) {
@@ -107,47 +95,9 @@ class AndroidIntelRouter @Inject constructor(
             )
         )
         
-        // Add specific analysis based on goal
-        when {
-            goalLower.contains("network") -> {
-                subSteps.add(
-                    OperationStep(
-                        id = "intel_network_scan",
-                        type = StepType.TARGET_ANALYSIS,
-                        domain = domain,
-                        description = "Analyze network configuration and connectivity",
-                        dependencies = listOf("intel_env_discovery"),
-                        estimatedDurationMs = 45000L
-                    )
-                )
-            }
-            
-            goalLower.contains("file") || goalLower.contains("data") -> {
-                subSteps.add(
-                    OperationStep(
-                        id = "intel_file_analysis",
-                        type = StepType.FILE_ENUMERATION,
-                        domain = domain,
-                        description = "Enumerate and analyze file system structure",
-                        dependencies = listOf("intel_env_discovery"),
-                        estimatedDurationMs = 60000L
-                    )
-                )
-            }
-            
-            goalLower.contains("security") || goalLower.contains("vulnerability") -> {
-                subSteps.add(
-                    OperationStep(
-                        id = "intel_security_scan",
-                        type = StepType.VULNERABILITY_SCAN,
-                        domain = domain,
-                        description = "Assess security posture and potential vulnerabilities",
-                        dependencies = listOf("intel_env_discovery"),
-                        estimatedDurationMs = 90000L
-                    )
-                )
-            }
-        }
+        // Use AI to determine specific analysis steps needed
+        val additionalSteps = generatePlanWithAI(goal, context)
+        subSteps.addAll(additionalSteps)
         
         // Always end with capability assessment
         subSteps.add(
@@ -351,86 +301,11 @@ class AndroidIntelRouter @Inject constructor(
         )
     }
     
-    private suspend fun fetchWebContent(step: OperationStep, context: OperationContext): StepResult {
-        val startTime = System.currentTimeMillis()
-        
-        val url = step.parameters["url"] as? String 
-            ?: return StepResult.failure(step.id, domain, "No URL provided for web content fetch", 0L)
-        
-        val webResult = webFetchTool.execute(mapOf("url" to url))
-        
-        val executionTime = System.currentTimeMillis() - startTime
-        
-        return if (webResult is ToolResult.Success) {
-            StepResult.success(
-                step.id,
-                domain,
-                data = mapOf(
-                    "url" to url,
-                    "content" to webResult.output,
-                    "content_length" to webResult.output.length.toString()
-                ),
-                executionTimeMs = executionTime
-            )
-        } else {
-            StepResult.failure(step.id, domain, "Web fetch failed: ${webResult.output}", executionTime)
-        }
-    }
+    // Web content fetching removed - belongs to WebScraperRouter domain
     
-    private suspend fun extractContent(step: OperationStep, context: OperationContext): StepResult {
-        val startTime = System.currentTimeMillis()
-        
-        val content = step.parameters["content"] as? String 
-            ?: return StepResult.failure(step.id, domain, "No content provided for extraction", 0L)
-        
-        val extractResult = extractorTool.execute(mapOf("content" to content))
-        
-        val executionTime = System.currentTimeMillis() - startTime
-        
-        return if (extractResult is ToolResult.Success) {
-            StepResult.success(
-                step.id,
-                domain,
-                data = mapOf(
-                    "extracted_content" to extractResult.output,
-                    "original_length" to content.length.toString(),
-                    "extracted_length" to extractResult.output.length.toString()
-                ),
-                executionTimeMs = executionTime
-            )
-        } else {
-            StepResult.failure(step.id, domain, "Content extraction failed: ${extractResult.output}", executionTime)
-        }
-    }
+    // Content extraction removed - belongs to WebScraperRouter domain
     
-    private suspend fun summarizeData(step: OperationStep, context: OperationContext): StepResult {
-        val startTime = System.currentTimeMillis()
-        
-        val content = step.parameters["content"] as? String 
-            ?: return StepResult.failure(step.id, domain, "No content provided for summarization", 0L)
-        
-        val summaryResult = summarizerTool.execute(mapOf(
-            "content" to content,
-            "max_length" to (step.parameters["max_length"] ?: "500")
-        ))
-        
-        val executionTime = System.currentTimeMillis() - startTime
-        
-        return if (summaryResult is ToolResult.Success) {
-            StepResult.success(
-                step.id,
-                domain,
-                data = mapOf(
-                    "summary" to summaryResult.output,
-                    "original_length" to content.length.toString(),
-                    "compression_ratio" to (content.length.toFloat() / summaryResult.output.length).toString()
-                ),
-                executionTimeMs = executionTime
-            )
-        } else {
-            StepResult.failure(step.id, domain, "Content summarization failed: ${summaryResult.output}", executionTime)
-        }
-    }
+    // Data summarization removed - belongs to WebScraperRouter domain
     
     // Helper methods
     
@@ -479,5 +354,51 @@ class AndroidIntelRouter @Inject constructor(
             context.securityLevel == SecurityLevel.STANDARD -> "standard_operational"
             else -> "limited_operational"
         }
+    }
+    
+    private suspend fun generatePlanWithAI(goal: String, context: OperationContext): List<OperationStep> {
+        val planningPrompt = buildPlanningPrompt(goal, context)
+        val model = appPreferences.orchestratorModel ?: "deepseek-r1:1.5b"
+        
+        return try {
+            val response = ollamaService.sendMessage(
+                message = planningPrompt,
+                model = model,
+                systemPrompt = "You are an Android device analysis specialist. Create step-by-step plans for local device operations only."
+            )
+            
+            parseStepsFromResponse(response.content)
+        } catch (e: Exception) {
+            logger.e(name, "AI planning failed: ${e.message}")
+            emptyList()
+        }
+    }
+    
+    private fun buildPlanningPrompt(goal: String, context: OperationContext): String {
+        return """
+        Goal: $goal
+        
+        Available Tools: device info, file operations, grep/glob search, local analysis
+        Security Level: ${context.securityLevel}
+        
+        Create specific steps for LOCAL ANDROID DEVICE analysis only. No web operations.
+        Focus on: device diagnostics, file system analysis, app information, system configuration.
+        """.trimIndent()
+    }
+    
+    private fun parseStepsFromResponse(response: String): List<OperationStep> {
+        // Simple parsing - extract step descriptions from AI response
+        val stepPattern = """(?:^\d+\.|Step \d+:|\n-)\s*(.+)""".toRegex(RegexOption.MULTILINE)
+        val matches = stepPattern.findAll(response)
+        
+        return matches.mapIndexed { index, match ->
+            OperationStep(
+                id = "ai_step_${index + 1}",
+                type = StepType.TARGET_ANALYSIS,
+                domain = domain,
+                description = match.groupValues[1].trim(),
+                estimatedDurationMs = 30000L
+            )
+        }.toList()
     }
 }

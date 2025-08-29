@@ -352,15 +352,27 @@ class PersonalityOrchestrator @Inject constructor(
     ): String {
         val history = conversationHistory.takeLast(4).joinToString("\n") { "${it.type}: ${it.content}" }
         return """
-        You are ${personality.name}, analyzing a user request.
+        You are ${personality.name} running on CoquetteMobile 1.0 Android app, analyzing a user request.
+        
         User Request: "$userMessage"
-        Recent Conversation:
-        $history
+        Recent Conversation: $history
 
-        Can I answer this through conversation alone, or does it need real-time data, external content, or device actions?
+        SYSTEM CAPABILITIES (available in COMPLEX mode only):
+        - Desktop control: keyboard/mouse injection, type text on computers, execute scripts
+        - Web operations: fetch content, scrape sites, gather online data
+        - File operations: read/write files, search, analyze local content  
+        - Device operations: Android system access, notifications, hardware control
+        
+        Can you handle this through conversation alone, or does it require system capabilities?
         
         SIMPLE: Pure conversation using existing knowledge
-        COMPLEX: Needs current information, web content, files, or device control
+        COMPLEX: Requires desktop control, web access, file operations, or device actions
+
+        Examples:
+        - "explain quantum physics" → SIMPLE
+        - "write text on my desktop/computer" → COMPLEX (desktop control)
+        - "what's on reddit today" → COMPLEX (web operations)
+        - "analyze my photos" → COMPLEX (file operations)
 
         Respond with ONLY JSON:
         {

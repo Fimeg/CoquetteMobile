@@ -332,15 +332,14 @@ object AppModule {
     @Singleton
     fun provideAndroidIntelRouter(
         deviceContextTool: DeviceContextTool,
-        webFetchTool: WebFetchTool,
-        extractorTool: ExtractorTool,
-        summarizerTool: SummarizerTool,
         fileTool: FileTool,
         grepTool: GrepTool,
         globTool: GlobTool,
+        ollamaService: OllamaService,
+        appPreferences: AppPreferences,
         logger: CoquetteLogger
     ): AndroidIntelRouter {
-        return AndroidIntelRouter(deviceContextTool, webFetchTool, extractorTool, summarizerTool, fileTool, grepTool, globTool, logger)
+        return AndroidIntelRouter(deviceContextTool, fileTool, grepTool, globTool, ollamaService, appPreferences, logger)
     }
 
     @Provides
@@ -349,9 +348,11 @@ object AppModule {
         hidKeyboardTool: HIDKeyboardTool,
         hidMouseTool: HIDMouseTool,
         hidWorkflowTool: HIDWorkflowTool,
+        ollamaService: OllamaService,
+        appPreferences: AppPreferences,
         logger: CoquetteLogger
     ): DesktopExploitRouter {
-        return DesktopExploitRouter(hidKeyboardTool, hidMouseTool, hidWorkflowTool, logger)
+        return DesktopExploitRouter(hidKeyboardTool, hidMouseTool, hidWorkflowTool, ollamaService, appPreferences, logger)
     }
 
     @Provides

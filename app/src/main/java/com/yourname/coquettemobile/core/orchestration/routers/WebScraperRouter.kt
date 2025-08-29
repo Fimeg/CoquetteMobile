@@ -82,34 +82,28 @@ class WebScraperRouter @Inject constructor(
     }
 
     override suspend fun planSubSteps(goal: String, context: OperationContext): List<OperationStep> {
-        logger.d(name, "WebScraperRouter using AI to plan for: $goal")
+        logger.d(name, "WebScraperRouter planning for: $goal")
         
-        return try {
-            val aiGeneratedPlan = generatePlanWithAI(goal, context)
-            aiGeneratedPlan.ifEmpty {
-                // Fallback if AI planning fails
-                listOf(
-                    OperationStep(
-                        id = "web_intelligence_${System.currentTimeMillis()}",
-                        type = StepType.WEB_INTELLIGENCE,
-                        domain = domain,
-                        description = goal,
-                        dependencies = emptyList()
-                    )
-                )
-            }
-        } catch (e: Exception) {
-            logger.e(name, "AI planning failed: ${e.message}, using fallback")
-            listOf(
-                OperationStep(
-                    id = "web_intelligence_${System.currentTimeMillis()}",
-                    type = StepType.WEB_INTELLIGENCE,
-                    domain = domain,
-                    description = goal,
-                    dependencies = emptyList()
-                )
+        // Extract URL from goal if present
+        val url = extractUrlFromGoal(goal) ?: "https://example.com"
+        
+        // Always use proven WebFetch→Extractor→Summarizer workflow
+        return listOf(
+            OperationStep(
+                id = "web_intelligence_${System.currentTimeMillis()}",
+                type = StepType.WEB_INTELLIGENCE,
+                domain = domain,
+                description = goal,
+                parameters = mapOf("url" to url),
+                dependencies = emptyList()
             )
-        }
+        )
+    }
+    
+    private fun extractUrlFromGoal(goal: String): String? {
+        // Simple URL extraction - look for http/https URLs in goal
+        val urlPattern = Regex("https?://[\\w.-]+(?:/[\\w.-]*)*")
+        return urlPattern.find(goal)?.value
     }
 
     private suspend fun generatePlanWithAI(goal: String, context: OperationContext): List<OperationStep> {
@@ -228,13 +222,9 @@ class WebScraperRouter @Inject constructor(
         logger.d(name, "Handling web intelligence request: $description")
 
         // Determine target URL based on request
-        val url = when {
-            description.contains("hacker news") -> "https://news.ycombinator.com"
-            description.contains("reddit") -> "https://reddit.com"
-            else -> step.parameters["url"] ?: return StepResult.failure(
-                step.id, domain, "No URL specified for web intelligence request", 0L
-            )
-        }
+        val url = step.parameters["url"] ?: return StepResult.failure(
+            step.id, domain, "No URL specified for web intelligence request", 0L
+        )
 
         // Execute the full web scraping workflow
         return executeWebScrapingWorkflow(step.id, url, context, startTime)
@@ -245,13 +235,11 @@ class WebScraperRouter @Inject constructor(
         val description = step.description.lowercase()
 
         // If it's a generic request that mentions web content, handle it
-        if (description.contains("web") || description.contains("fetch") || description.contains("scrape")) {
-            val url = step.parameters["url"] ?: return StepResult.failure(
-                step.id, domain, "No URL provided for web request", 0L
-            )
+        val url = step.parameters["url"] ?: return StepResult.failure(
+            step.id, domain, "No URL provided for web request", 0L
+        )
 
-            return executeWebScrapingWorkflow(step.id, url, context, startTime)
-        }
+        return executeWebScrapingWorkflow(step.id, url, context, startTime)
 
         return StepResult.failure(step.id, domain, "Cannot handle this type of request", 0L)
     }
