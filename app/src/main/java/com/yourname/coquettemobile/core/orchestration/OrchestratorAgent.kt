@@ -101,29 +101,28 @@ class OrchestratorAgent @Inject constructor(
     }
 
     /**
-     * Simple CEO decision making - choose the right department
+     * AI-powered CEO decision making - choose the right department using AI reasoning
      */
-    private fun selectAppropriateRouter(userIntent: String, context: OperationContext): ToolRouter? {
-        val intent = userIntent.lowercase()
+    private suspend fun selectAppropriateRouter(userIntent: String, context: OperationContext): ToolRouter? {
         val availableRouters = routerRegistry.getAllRouters()
         
-        // CEO decision logic - simple and direct
-        return when {
-            // Web content requests go to WebScraperRouter
-            intent.contains("hacker news") || intent.contains("web") || 
-            intent.contains("scrape") || intent.contains("fetch") ||
-            intent.contains("what's on") -> availableRouters.find { it.domain == RouterDomain.WEB_INTELLIGENCE }
+        val departmentSelectionPrompt = buildDepartmentSelectionPrompt(userIntent, availableRouters)
+        
+        return try {
+            val response = ollamaService.sendMessage(
+                message = departmentSelectionPrompt,
+                model = appPreferences.orchestratorModel ?: "deepseek-r1:1.5b",
+                systemPrompt = CEO_SYSTEM_PROMPT
+            )
             
-            // System analysis goes to AndroidIntelRouter  
-            intent.contains("system") || intent.contains("device") ||
-            intent.contains("analyze") || intent.contains("info") -> availableRouters.find { it.domain == RouterDomain.ANDROID_INTELLIGENCE }
+            val selectedDomain = parseDepartmentFromResponse(response.content)
+            logger.d("OrchestratorAgent", "CEO selected department: $selectedDomain for request: $userIntent")
             
-            // Desktop HID operations go to DesktopExploitRouter  
-            intent.contains("execute") || intent.contains("script") ||
-            intent.contains("install") || intent.contains("run") -> availableRouters.find { it.domain == RouterDomain.DESKTOP_EXPLOIT }
-            
-            // Default fallback - try AndroidIntelRouter for general requests
-            else -> availableRouters.find { it.domain == RouterDomain.ANDROID_INTELLIGENCE }
+            availableRouters.find { it.domain == selectedDomain }
+                ?: availableRouters.find { it.domain == RouterDomain.ANDROID_INTELLIGENCE } // Fallback
+        } catch (e: Exception) {
+            logger.e("OrchestratorAgent", "CEO department selection failed: ${e.message}")
+            availableRouters.find { it.domain == RouterDomain.ANDROID_INTELLIGENCE } // Safe fallback
         }
     }
 
@@ -345,7 +344,50 @@ class OrchestratorAgent @Inject constructor(
         """.trimIndent()
     }
 
+    /**
+     * Build prompt for AI-powered department selection
+     */
+    private fun buildDepartmentSelectionPrompt(userIntent: String, availableRouters: List<ToolRouter>): String {
+        val departmentDescriptions = availableRouters.joinToString("\n") { router ->
+            val capabilities = router.capabilities.joinToString(", ")
+            "- **${router.domain.name}**: Expert in ${router.domain.name.replace('_', ' ').lowercase()}. Capabilities: $capabilities"
+        }
+        
+        return """
+        User Request: "$userIntent"
+        
+        Available Departments:
+        $departmentDescriptions
+        
+        Which department should handle this request? Respond with only the department name (e.g., "ANDROID_INTELLIGENCE", "WEB_INTELLIGENCE", "DESKTOP_EXPLOIT").
+        """.trimIndent()
+    }
+    
+    /**
+     * Parse the department selection from AI response
+     */
+    private fun parseDepartmentFromResponse(response: String): RouterDomain? {
+        val cleanResponse = response.trim().uppercase()
+        return when {
+            cleanResponse.contains("WEB_INTELLIGENCE") || cleanResponse.contains("WEB") -> RouterDomain.WEB_INTELLIGENCE
+            cleanResponse.contains("DESKTOP_EXPLOIT") || cleanResponse.contains("DESKTOP") -> RouterDomain.DESKTOP_EXPLOIT
+            cleanResponse.contains("ANDROID_INTELLIGENCE") || cleanResponse.contains("ANDROID") -> RouterDomain.ANDROID_INTELLIGENCE
+            else -> null
+        }
+    }
+
     companion object {
+        private const val CEO_SYSTEM_PROMPT = """
+        You are the CEO of a technology company with specialized departments. Your job is to quickly identify which department should handle each request.
+
+        **Decision Criteria:**
+        - WEB_INTELLIGENCE: Web scraping, content fetching, online research, news sites
+        - ANDROID_INTELLIGENCE: Device information, system analysis, local Android operations  
+        - DESKTOP_EXPLOIT: Computer automation, HID control, desktop applications, scripting
+
+        Make your decision based on the core action requested. Respond with only the department name.
+        """
+
         private const val ORCHESTRATOR_SYSTEM_PROMPT = """
         You are the OrchestratorAgent, the CEO of a company of AI specialists. Your one and only job is to create the most efficient, simple, and direct execution plan to accomplish the user's goal.
 

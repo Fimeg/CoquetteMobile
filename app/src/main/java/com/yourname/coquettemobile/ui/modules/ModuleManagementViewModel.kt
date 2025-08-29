@@ -50,7 +50,7 @@ class ModuleManagementViewModel @Inject constructor(
             "Therapy" -> "Reflective listening, emotional support, gentle guidance"
             "Activist" -> "System analysis, action planning, strategic thinking" 
             "Story" -> "Creative writing, scene building, narrative flow"
-            "Erotica" -> "Sensual tension, intimate scenarios, physical detail"
+            "Creative" -> "Creative scenarios, expressive prose, imaginative content"
             "ToolAwareness" -> "Knowledge of available tools and capabilities"
             else -> "Custom personality module"
         }
